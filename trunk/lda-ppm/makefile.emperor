@@ -1,0 +1,18 @@
+CC = g++ -Wall -O2
+LDFLAGS = -lgsl -lm -lgslcblas -larmadillo
+
+GSL_INCLUDE = /home/cgeorge/lib/gsl/include
+GSL_LIB = /home/cgeorge/lib/gsl/lib
+ARMA_LIB = /home/cgeorge/lib/armadillo/usr/lib64
+ARMA_INCLUDE = /home/cgeorge/lib/armadillo/usr/include
+
+LSOURCE =  LDAPPMBase.cpp LDAPPMModel.cpp TopicSearch.cpp ldappm.cpp
+LHEADER =  LDAPPMBase.h LDAPPMModel.h TopicSearch.h Timer.h
+
+ldappm: $(LSOURCE) $(LHEADER)
+	$(CC)  -I$(GSL_INCLUDE) -I$(ARMA_INCLUDE) -L$(GSL_LIB) -L$(ARMA_LIB) $(LSOURCE) -o $@ $(LDFLAGS)
+
+clean:
+	rm -f *.o ldappm
+
+
