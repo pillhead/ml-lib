@@ -7,31 +7,24 @@
 ##
 
 
-# setwd('/home/clint/ldappmcpp/ldappm_cpp/src') # To set the working dir 
-# setwd('/home/clint/ldappm/src') # To set the working dir
-# setwd("F:/Research/ldappm/src") # To set the working dir
-setwd('/home/clint/Dropbox/ldappm/src') # To set the working dir
+setwd("F:/Research/ml-lib/lda-r")
+
 
 # Loads the necessary R pkgs 
 
-library(MCMCpack); 
+library(MCMCpack);
 library(plotrix);
 
 # Includes the source files  
 
 source('process_data.R');
 source('utils.R');
-source('lda_ppm.R');
-source('lda_ppm_learnK.R');
-source('topic_search.R');
-source('read.vocab.R');
 source('top.topic.documents.R');
-source('top.topic.words.R');
 
 
 # Displaying the original beta (TRUTH) that is used to generate synthetic documents 
 
-sbeta <- t(read.table('../synth_beta.txt', header=F)); 
+sbeta <- t(read.table('../lda-data/synth_beta.txt', header=F)); 
 color2D.matplot(sbeta, c(0.6, 0), c(0, 0.9), c(0,1), xlab="words", ylab="partitions (topics)", main="Synthetic beta matrix");
 		
 
@@ -50,10 +43,10 @@ ds <- LDASamples(K, D, V, alpha, lambda.h, sbeta);
 ## WRITES INTO FILES 
 
 did.wid <- cbind(ds$did, ds$wid);
-write.table(did.wid, file = "../synth200d400w.docword", row.names = FALSE, col.name=FALSE);
-write.table(ds$theta, file = "../synth200d400w.theta", row.names = FALSE, col.name=FALSE);
-write.table(ds$theta.counts, file = "../synth200d400w.theta_counts", row.names = FALSE, col.name=FALSE);
-write.table(1:100, file = "../synth200d400w.vocab", row.names = FALSE, col.name=FALSE);
+write.table(did.wid, file = "../lda-data/synth200d400w.docword", row.names = FALSE, col.name=FALSE);
+write.table(ds$theta, file = "../lda-data/synth200d400w.theta", row.names = FALSE, col.name=FALSE);
+write.table(ds$theta.counts, file = "../lda-data/synth200d400w.theta_counts", row.names = FALSE, col.name=FALSE);
+write.table(1:100, file = "../lda-data/synth200d400w.vocab", row.names = FALSE, col.name=FALSE);
 
 
 ### ==================================================================================================================================== ### 

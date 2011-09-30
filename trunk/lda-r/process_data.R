@@ -61,6 +61,22 @@ ReadCounts <- function(wid.file, did.file)
 	list(total.N=N, D=D, V=W, wid=as.vector(wids$V1), did=as.vector(dids$V1));
  
 }
+
+CalcPartitionCounts <- function(Z, K)
+{
+  ## Calculates the partition counts 
+	# 
+	# Inputs: 
+ 	#	Z		- topic selection for each word instance
+	#	K		- total topics in a corpus 
+	# 
+	
+	Nt <- array(0, c(1, K)); 
+	for (k in 1:K) Nt[k] <- sum(Z == k);
+
+	return(Nt); 	
+}
+
      
 LDASamples <- function(K, D, V, alpha, lamda.hat, beta)
 {
