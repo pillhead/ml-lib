@@ -85,5 +85,6 @@ void set_smooth1d (int T, double *x, double smooth);
 double pplex(int N, int W, int T, double alpha, double beta, int *w, int *d, int **Nwt, int **Ndt);
 double pplex_d(int N, int W, int T, int *w, int *d, double **Nwt, double **Ndt);
 
-
+void read_ldac(char *fname, int *d, int *w, int *D, int *W) ;
+int countN_ldac(char *fname);
 #endif

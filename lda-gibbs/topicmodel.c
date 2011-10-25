@@ -27,20 +27,31 @@ int main(int argc, char* argv[])
 	int *w, *d, *z, *order;
 	double **Nwt, **Ndt, *Nt;
 	double alpha, beta;
+	char * file_name = NULL;
+	char * data_format = NULL;
 
-	if (argc == 1) {
-		fprintf(stderr, "usage: %s T iter seed\n", argv[0]);
+	if (argc < 6) {
+		fprintf(stderr, "usage: %s T iter seed data_format input_file \n", argv[0]);
 		exit(-1);
 	}
 	T    = atoi(argv[1]); assert(T>0);
 	iter = atoi(argv[2]); assert(iter>0);
 	seed = atoi(argv[3]); assert(seed>0);
+	data_format = argv[4];
+	file_name = argv[5];
 
-	N = countN("docword.txt");
+	// reads the total number of instances
+	if (!strcmp(data_format, "sm"))
+		N = countN(file_name);
+	else
+		N = countN_ldac(file_name);
 	w = ivec(N);
 	d = ivec(N);
 	z = ivec(N);
-	read_dw("docword.txt", d, w, &D, &W);
+	if (!strcmp(data_format, "sm"))
+		read_dw(file_name, d, w, &D, &W);
+	else
+		read_ldac(file_name, d, w, &D, &W);
 	Nwt = dmat(W,T);
 	Ndt = dmat(D,T);
 	Nt  = dvec(T);  
@@ -48,14 +59,16 @@ int main(int argc, char* argv[])
 	alpha = 0.05 * N / (D * T);
 	beta  = 0.01;
 
-	printf("seed  = %d\n", seed);
-	printf("N     = %d\n", N);
-	printf("W     = %d\n", W);
-	printf("D     = %d\n", D);
-	printf("T     = %d\n", T);
-	printf("iter  = %d\n", iter);
-	printf("alpha = %f\n", alpha);
-	printf("beta  = %f\n", beta);
+	printf("format     = %s\n", data_format);
+	printf("file name  = %s\n", file_name);
+	printf("seed       = %d\n", seed);
+	printf("N          = %d\n", N);
+	printf("W          = %d\n", W);
+	printf("D          = %d\n", D);
+	printf("T          = %d\n", T);
+	printf("iter       = %d\n", iter);
+	printf("alpha      = %f\n", alpha);
+	printf("beta       = %f\n", beta);
 
 	srand48(seed);
 	randomassignment_d(N, T, w, d, z, Nwt, Ndt, Nt);
