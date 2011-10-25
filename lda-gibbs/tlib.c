@@ -204,7 +204,7 @@ int countN_ldac(char *fname) //
 	int length, count, word_id, n, ret;
 	int num_word_instances = 0;
 
-	printf("\nReading data from %s \n", fname);
+	// printf("\nReading data from %s \n", fname);
 	FILE * fileptr = fopen(fname, "r"); assert(fileptr);
 
 	while ((fscanf(fileptr, "%10d", &length) != EOF)) {
@@ -216,7 +216,7 @@ int countN_ldac(char *fname) //
 
 	fclose(fileptr);
 
-	printf("\nNumber of total words : %d \n", num_word_instances);
+	// printf("\nNumber of total words : %d \n", num_word_instances);
 	assert(num_word_instances > 0);
 	return num_word_instances;
 }
@@ -479,7 +479,7 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 	unsigned int did = 0;
 
 
-	printf("\nReading data from %s \n", fname);
+	// printf("\nReading data from %s \n", fname);
 
 	FILE * fileptr = fopen(fname, "r"); assert(fileptr);
 
@@ -488,7 +488,6 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 		for (n = 0; n < length; n++) {
 			ret = fscanf(fileptr, "%10d:%10d", &word_id, &count);assert(ret);
 			*W = MAX(*W, word_id);
-			word_id = word_id;
 
 			for (ni = 0; ni < count; ni++){
 				w[num_word_instances] = word_id;
@@ -502,12 +501,12 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 	}
 
 	fclose(fileptr);
-	*D = did;
+	*D = did + 1;
 	*W += 1; // since index starts at 0
 
-	printf("\nNumber of documents   : %d \n", *D);
-	printf("\nVocabulary size       : %d \n", *W);
-	printf("\nNumber of total words : %d \n", num_word_instances);
+	// printf("\nNumber of documents   : %d \n", *D);
+	// printf("\nVocabulary size       : %d \n", *W);
+	// printf("\nNumber of total words : %d \n", num_word_instances);
 
 }
 
