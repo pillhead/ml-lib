@@ -22,23 +22,38 @@ int main(int argc, char* argv[])
 	int W; // number of unique words
 	int D; // number of docs
 	int N; // number of words in corpus
+	int prior_W;
+	int prior_T;
 
-	int i, iter, seed;
+	int i, iter, seed, j;
 	int *w, *d, *z, *order;
-	double **Nwt, **Ndt, *Nt;
+	double **Nwt, **Ndt, *Nt, **prior_Nwt;
 	double alpha, beta;
 	char * file_name = NULL;
 	char * data_format = NULL;
+	char * prior_beta_file = NULL;
+	int prior_flg = 0;
 
 	if (argc < 6) {
 		fprintf(stderr, "usage: %s T iter seed data_format input_file \n", argv[0]);
 		exit(-1);
 	}
+
 	T    = atoi(argv[1]); assert(T>0);
 	iter = atoi(argv[2]); assert(iter>0);
 	seed = atoi(argv[3]); assert(seed>0);
 	data_format = argv[4];
 	file_name = argv[5];
+
+	// Reads prior beta provided
+	if (argc == 7){
+		prior_flg = 1;
+		prior_beta_file = argv[6];
+		prior_Nwt = read_sparse(prior_beta_file, &prior_W, &prior_T);
+		assert(T == prior_T);
+		assert(W == prior_W);
+	}
+
 
 	// reads the total number of instances
 	if (!strcmp(data_format, "sm"))
@@ -78,16 +93,31 @@ int main(int argc, char* argv[])
 	add_smooth_d(W, T, Nwt, beta);
 	add_smooth1d(T, Nt, W * beta);
 
-	for (i = 0; i < iter; i++) {
-		sample_chain_d(N,W,T,w,d,z,Nwt,Ndt,Nt,order);
-		printf("iter %d \n", i);
+	if (!prior_flg) {
+		for (i = 0; i < iter; i++) {
+			sample_chain_d(N,W,T,w,d,z,Nwt,Ndt,Nt,order);
+			printf("iter %d \n", i);
+		}
 	}
-
+	else {
+		for (i = 0; i < iter; i++) {
+			sample_chain_with_prior(N,W,T,w,d,z,Nwt,Ndt,Nt,order, prior_Nwt);
+			printf("iter %d \n", i);
+		}
+	}
 	printf("In-Sample Perplexity = %.2f\n", pplex_d(N, W, T, w, d, Nwt, Ndt));
 
 	add_smooth_d(D, T, Ndt, -alpha);
 	add_smooth_d(W, T, Nwt,-beta);
 	add_smooth1d(T, Nt, -W * beta);
+
+
+	// Calculates the effective beta
+	if (prior_flg){
+		for (i = 0; i < W; i++)
+			for (j = 0; j < T; j++)
+				Nwt[i][j] += prior_Nwt[i][j];
+	}
 
 	write_sparse_d(W, T, Nwt, "Nwt.txt");
 	write_sparse_d(D, T, Ndt, "Ndt.txt");

@@ -364,17 +364,25 @@ void write_sparsebin(int nr, int nc, int **x, char *fname) //
 			free(col3);
 }
 
-int **read_sparse(char *fname, int *nr_, int *nc_) //
+/**
+ * Reads a sparse matrix file and into a matrix in memory
+ *
+ * @param fname sparse matrix file
+ * @param nr_ number of rows
+ * @param nc_ number of colums
+ * @return matrix
+ */
+double **read_sparse(char *fname, int *nr_, int *nc_) //
 {
 	FILE *fp = fopen(fname,"r");
-	int i, j, c, nr, nc, NNZ;
-	int **x;
+	int i, j, nr, nc, NNZ;
+	double **x, c;
 	assert(fp);
 	fscanf(fp,"%d", &nr);  assert(nr>0);
 	fscanf(fp,"%d", &nc);  assert(nc>0);
 	fscanf(fp,"%d", &NNZ); assert(NNZ>0);
-	x = imat(nr,nc);
-	while (fscanf(fp, "%d%d%d", &i, &j, &c) != EOF) {
+	x = dmat(nr,nc);
+	while (fscanf(fp, "%d%d%lf", &i, &j, &c) != EOF) {
 		i--;
 		j--;
 		assert(i<nr);
@@ -806,6 +814,56 @@ void sample_chain_d (int N, int W, int T, int *w, int *d, int *z, double **Nwt, 
 
 		for (t = 0; t < T; t++) {
 			prob[t] = doc_vec[t] * word_vec[t] / Nt[t];
+			totprob += prob[t];
+		}
+
+		U = drand48()*totprob;
+		cumprob = prob[0];
+		t = 0;
+		while (U>cumprob) {
+			t++;
+			cumprob += prob[t];
+		}
+
+		z[i] = t;
+		word_vec[t]++;
+		doc_vec[t]++;
+		Nt[t]++;
+	}
+
+	free(prob);
+}
+
+
+void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt) //
+{
+	int ii, i, t;
+	double totprob, U, cumprob;
+	double *prob = dvec(T);
+	int wid, did;
+	double *word_vec;
+	double *doc_vec;
+	double *prior_word_vec;
+
+	for (ii = 0; ii < N; ii++) {
+
+		i = order[ ii ];
+
+		wid = w[i];
+		did = d[i];
+
+		word_vec = Nwt[wid];
+		doc_vec  = Ndt[did];
+		prior_word_vec = prior_Nwt[wid];
+
+		t = z[i];
+		Nt[t]--;
+		word_vec[t]--;
+		doc_vec[t]--;
+		totprob = 0;
+
+		for (t = 0; t < T; t++) {
+			prob[t] = doc_vec[t] * (word_vec[t] + prior_word_vec[t]) / Nt[t];
 			totprob += prob[t];
 		}
 
