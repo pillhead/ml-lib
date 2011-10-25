@@ -175,6 +175,12 @@ int countlines(char *fname) //
 	return lines;
 }
 
+/**
+ * Counts word instances in the corpus
+ *
+ * @param fname input file name (sparse matrix format)
+ * @return counts
+ */
 int countN(char *fname) //
 {
 	int i, count, N = 0;
@@ -186,6 +192,36 @@ int countN(char *fname) //
 	assert(N>0);
 	return N;
 }
+
+/**
+ * Counts word instances in the corpus
+ *
+ * @param fname input file name (LDA-C format)
+ * @return counts
+ */
+int countN_ldac(char *fname) //
+{
+	int length, count, word_id, n, ret;
+	int num_word_instances = 0;
+
+	printf("\nReading data from %s \n", fname);
+	FILE * fileptr = fopen(fname, "r"); assert(fileptr);
+
+	while ((fscanf(fileptr, "%10d", &length) != EOF)) {
+		for (n = 0; n < length; n++) {
+			ret = fscanf(fileptr, "%10d:%10d", &word_id, &count);assert(ret);
+			num_word_instances += count; // increments word instances
+		}
+	}
+
+	fclose(fileptr);
+
+	printf("\nNumber of total words : %d \n", num_word_instances);
+	assert(num_word_instances > 0);
+	return num_word_instances;
+}
+
+
 
 /*------------------------------------------
 * sort: call qsort library function
@@ -388,7 +424,16 @@ int **read_sparse_trans(char *fname, int *nr_, int *nc_) //
 	*nc_ = nr;
 	return x;
 }
-
+/**
+ * Reads input data file which is in the sparse matrix
+ * format into memory
+ *
+ * @param fname file name
+ * @param d document id vector
+ * @param w word id vector
+ * @param D the number of documents in the corpus
+ * @param W the vocabulary size
+ */
 void read_dw(char *fname, int *d, int *w, int *D, int *W) //
 {
 	int i,wt,dt,ct,count,NNZ;
@@ -406,6 +451,58 @@ void read_dw(char *fname, int *d, int *w, int *D, int *W) //
 	}
 	fclose(fp);
 }
+
+
+/**
+ * Reads input data file which is in the LDA-C format into memory
+ *
+ * Each line is in this format [unique document words] [vocabulary id]:[count]
+ *
+ * @param fname file name
+ * @param d document id vector
+ * @param w word id vector
+ * @param D the number of documents in the corpus
+ * @param W the vocabulary size
+ */
+void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
+
+	int length, count, word_id, n, ni, ret;
+	int num_word_instances = 0;
+	unsigned int did = 0;
+
+
+	printf("\nReading data from %s \n", fname);
+
+	FILE * fileptr = fopen(fname, "r"); assert(fileptr);
+
+	while ((fscanf(fileptr, "%10d", &length) != EOF)) {
+
+		for (n = 0; n < length; n++) {
+			ret = fscanf(fileptr, "%10d:%10d", &word_id, &count);assert(ret);
+			*W = MAX(*W, word_id);
+			word_id = word_id;
+
+			for (ni = 0; ni < count; ni++){
+				w[num_word_instances] = word_id;
+				d[num_word_instances] = did;
+				num_word_instances++; // increments word instances
+			}
+		}
+
+		did++; // increments document ids
+
+	}
+
+	fclose(fileptr);
+	*D = did;
+	*W += 1; // since index starts at 0
+
+	printf("\nNumber of documents   : %d \n", *D);
+	printf("\nVocabulary size       : %d \n", *W);
+	printf("\nNumber of total words : %d \n", num_word_instances);
+
+}
+
 
 void fill_Nd(int N, int *d, int *Nd) //
 {
