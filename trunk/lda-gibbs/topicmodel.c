@@ -51,7 +51,6 @@ int main(int argc, char* argv[])
 		prior_beta_file = argv[6];
 		prior_Nwt = read_sparse(prior_beta_file, &prior_W, &prior_T);
 		assert(T == prior_T);
-		assert(W == prior_W);
 	}
 
 
@@ -67,6 +66,14 @@ int main(int argc, char* argv[])
 		read_dw(file_name, d, w, &D, &W);
 	else
 		read_ldac(file_name, d, w, &D, &W);
+
+	// The vocabulary size should be the same
+	// We assume that there won't be any new
+	// terms in the online document (that
+	// should be removed during pre-processing step)
+	if (prior_flg)
+		W = prior_W;
+
 	Nwt = dmat(W,T);
 	Ndt = dmat(D,T);
 	Nt  = dvec(T);  
