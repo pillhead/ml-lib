@@ -88,5 +88,6 @@ double pplex_d(int N, int W, int T, int *w, int *d, double **Nwt, double **Ndt);
 void read_ldac(char *fname, int *d, int *w, int *D, int *W) ;
 int countN_ldac(char *fname);
 void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt);
+void write_matrix(int nr, int nc, double **x, char *fname);
 
 #endif

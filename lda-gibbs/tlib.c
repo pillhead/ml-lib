@@ -335,6 +335,19 @@ void write_sparse_d(int nr, int nc, double **x, char *fname) //
 	fclose(fp);
 }
 
+void write_matrix(int nr, int nc, double **x, char *fname) //
+{
+	FILE *fp = fopen(fname,"w");
+	int i, j;
+	assert(fp);
+	for (i = 0; i < nr; i++) {
+		for (j = 0; j < nc; j++)
+			fprintf(fp, "%lf ", x[i][j]);
+		fprintf(fp, "\n");
+	}
+	fclose(fp);
+}
+
 void write_sparsebin(int nr, int nc, int **x, char *fname) //
 {
 	int i, j, k, chk;

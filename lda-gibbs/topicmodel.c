@@ -128,6 +128,8 @@ int main(int argc, char* argv[])
 
 	write_sparse_d(W, T, Nwt, "Nwt.txt");
 	write_sparse_d(D, T, Ndt, "Ndt.txt");
+	write_matrix(W, T, Nwt, "Nwt_full.txt");
+	write_matrix(D, T, Ndt, "Ndt_full.txt");
 	write_ivec(N, z, "z.txt");
 
 	return 0;
