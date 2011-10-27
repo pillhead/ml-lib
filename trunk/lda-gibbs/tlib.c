@@ -342,7 +342,10 @@ void write_matrix(int nr, int nc, double **x, char *fname) //
 	assert(fp);
 	for (i = 0; i < nr; i++) {
 		for (j = 0; j < nc; j++)
-			fprintf(fp, "%lf ", x[i][j]);
+			if (fabs(x[i][j]) > 1e-6)
+				fprintf(fp, "%lf ", fabs(x[i][j]));
+			else
+				fprintf(fp, "%lf ", 0.0);
 		fprintf(fp, "\n");
 	}
 	fclose(fp);

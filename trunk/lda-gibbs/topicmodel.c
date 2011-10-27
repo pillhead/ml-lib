@@ -130,6 +130,9 @@ int main(int argc, char* argv[])
 	printf("In-Sample Perplexity = %.2f\n", pplex_d(N, W, T, w, d, Nwt, Ndt));
 	printf("Time taken = %.5fs\n", total_time);
 
+	write_matrix(W, T, Nwt, "Nwt_full.txt");
+	write_matrix(D, T, Ndt, "Ndt_full.txt");
+
 	add_smooth_d(D, T, Ndt, -alpha);
 	add_smooth_d(W, T, Nwt,-beta);
 	add_smooth1d(T, Nt, -W * beta);
@@ -144,8 +147,6 @@ int main(int argc, char* argv[])
 
 	write_sparse_d(W, T, Nwt, "Nwt.txt");
 	write_sparse_d(D, T, Ndt, "Ndt.txt");
-	write_matrix(W, T, Nwt, "Nwt_full.txt");
-	write_matrix(D, T, Ndt, "Ndt_full.txt");
 	write_ivec(N, z, "z.txt");
 
 	return 0;
