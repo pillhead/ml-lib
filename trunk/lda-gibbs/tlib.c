@@ -16,6 +16,38 @@ static int icomp(const void *, const void *); /* comparison for isort */
 static int dcomp(const void *, const void *); /* comparison for dsort */
 static int    *icomp_vec;                     /*  data used for isort */
 static double *dcomp_vec;                     /*  data used for dsort */
+gsl_rng *random_num_generator_;				// random number generator
+unsigned long int random_seed_; 			// seed
+
+
+void init_random_generator(){
+
+	random_num_generator_ = gsl_rng_alloc (gsl_rng_mt19937);     		// pick random number generator
+	random_seed_ = time (NULL) * getpid();								// seed
+
+	gsl_rng_set (random_num_generator_, random_seed_);                  // sets seed
+
+}
+
+
+void free_random_generator(){
+
+	gsl_rng_free(random_num_generator_);
+
+}
+
+double sample_uniform(){
+
+	return gsl_rng_uniform(random_num_generator_);
+
+}
+
+unsigned int sample_uniform_int(unsigned int K){
+
+	return (unsigned int) gsl_rng_uniform_int(random_num_generator_, K);
+
+}
+
 
 /*------------------------------------------
 * allocation routines
@@ -340,8 +372,26 @@ void write_matrix(int nr, int nc, double **x, char *fname) //
 	FILE *fp = fopen(fname,"w");
 	int i, j;
 	assert(fp);
+
 	for (i = 0; i < nr; i++) {
 		for (j = 0; j < nc; j++)
+			if (fabs(x[i][j]) > 1e-6)
+				fprintf(fp, "%lf ", fabs(x[i][j]));
+			else
+				fprintf(fp, "%lf ", 0.0);
+		fprintf(fp, "\n");
+	}
+	fclose(fp);
+}
+
+void write_matrix_transpose(int nr, int nc, double **x, char *fname) //
+{
+	FILE *fp = fopen(fname,"w");
+	int i, j;
+	assert(fp);
+
+	for (j = 0; j < nc; j++) {
+		for (i = 0; i < nr; i++)
 			if (fabs(x[i][j]) > 1e-6)
 				fprintf(fp, "%lf ", fabs(x[i][j]));
 			else
@@ -403,7 +453,7 @@ double **read_sparse(char *fname, int *nr_, int *nc_) //
 		j--;
 		assert(i<nr);
 		assert(j<nc);
-		assert(c>0);
+		assert(c>=0);
 		x[i][j] = c;
 	}
 	fclose(fp);
@@ -493,6 +543,7 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 	int length, count, word_id, n, ni, ret;
 	int num_word_instances = 0;
 	unsigned int did = 0;
+	*W = 0;
 
 
 	// printf("\nReading data from %s \n", fname);
@@ -517,7 +568,7 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 	}
 
 	fclose(fileptr);
-	*D = did + 1;
+	*D = did;
 	*W += 1; // since index starts at 0
 
 	// printf("\nNumber of documents   : %d \n", *D);
@@ -525,6 +576,40 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) {
 	// printf("\nNumber of total words : %d \n", num_word_instances);
 
 }
+
+/**
+ * Counts document counts from an input data file,
+ * which is in the LDA-C format into memory
+ *
+ * Each line is in this format [unique document words] [vocabulary id]:[count]
+ *
+ * @param fname file name
+ * @param d document id vector, of D length
+ */
+void read_doc_word_counts_ldac(char *fname, int *d) {
+
+	int length, count, word_id, n, ret;
+	unsigned int did = 0;
+
+
+	FILE * fileptr = fopen(fname, "r"); assert(fileptr);
+
+	while ((fscanf(fileptr, "%10d", &length) != EOF)) {
+
+		for (n = 0; n < length; n++) {
+			ret = fscanf(fileptr, "%10d:%10d", &word_id, &count); assert(ret);
+			d[did] += count;
+		}
+
+		did++; // increments document ids
+
+	}
+
+
+	fclose(fileptr);
+
+}
+
 
 
 void fill_Nd(int N, int *d, int *Nd) //
@@ -634,7 +719,7 @@ int *randperm(int n) //
 	nn = n;
 	for (k=0; k<n; k++) {
 		// take a number between 0 and nn-1
-		takeanumber = (int) (nn*drand48());
+		takeanumber = sample_uniform_int(nn); // (int) (nn*drand48());
 		temp = order[ nn-1 ];
 		order[ nn-1 ] = order[ takeanumber ];
 		order[ takeanumber ] = temp;
@@ -642,6 +727,7 @@ int *randperm(int n) //
 	}
 	return order;
 }
+
 
 /*------------------------------------------
 * randomassignment
@@ -662,10 +748,23 @@ void randomassignment_d(int N, int T, int *w, int *d, int *z, double **Nwt, doub
 {
 	int i, t;
 	for (i = 0; i < N; i++) {
-		t = (int)(T*drand48());
+		t = sample_uniform_int(T); //  (int)(T*drand48());
 		z[i] = t;
 		Nwt[w[i]][t]++;
 		Ndt[d[i]][t]++;
+		Nt[t]++;
+	}
+}
+
+
+void randomassignment_for_doc(int N, int T, int *w, int *d, int *z, double **Nwt, double *Ndt, double *Nt) //
+{
+	int i, t;
+	for (i = 0; i < N; i++) {
+		t = sample_uniform_int(T); //  (int)(T*drand48());
+		z[i] = t;
+		Nwt[w[i]][t]++;
+		Ndt[t]++;
 		Nt[t]++;
 	}
 }
@@ -832,10 +931,11 @@ void sample_chain_d (int N, int W, int T, int *w, int *d, int *z, double **Nwt, 
 			totprob += prob[t];
 		}
 
-		U = drand48()*totprob;
+		// U = drand48() * totprob;
+		U = sample_uniform() * totprob;
 		cumprob = prob[0];
 		t = 0;
-		while (U>cumprob) {
+		while (U > cumprob) {
 			t++;
 			cumprob += prob[t];
 		}
@@ -882,7 +982,8 @@ void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, doubl
 			totprob += prob[t];
 		}
 
-		U = drand48()*totprob;
+		// U = drand48()*totprob;
+		U = sample_uniform() * totprob;
 		cumprob = prob[0];
 		t = 0;
 		while (U>cumprob) {
@@ -893,6 +994,52 @@ void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, doubl
 		z[i] = t;
 		word_vec[t]++;
 		doc_vec[t]++;
+		Nt[t]++;
+	}
+
+	free(prob);
+}
+
+void sample_doc_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double *Ndt, double *Nt, int *order, double **prior_Nwt) //
+{
+	int ii, i, t;
+	double totprob, U, cumprob;
+	double *prob = dvec(T);
+	int wid;
+	double *word_vec;
+	double *prior_word_vec;
+
+	for (ii = 0; ii < N; ii++) {
+
+		i = order[ ii ];
+
+		wid = w[i];
+		word_vec = Nwt[wid];
+		prior_word_vec = prior_Nwt[wid];
+
+		t = z[i];
+		Nt[t]--;
+		word_vec[t]--;
+		Ndt[t]--;
+		totprob = 0;
+
+		for (t = 0; t < T; t++) {
+			prob[t] = Ndt[t] * (word_vec[t] + prior_word_vec[t]) / Nt[t];
+			totprob += prob[t];
+		}
+
+		// U = drand48()*totprob;
+		U = sample_uniform() * totprob;
+		cumprob = prob[0];
+		t = 0;
+		while (U>cumprob) {
+			t++;
+			cumprob += prob[t];
+		}
+
+		z[i] = t;
+		word_vec[t]++;
+		Ndt[t]++;
 		Nt[t]++;
 	}
 
@@ -1321,18 +1468,22 @@ double pplex_d(int N, int W, int T, int *w, int *d, double **Nwt, double **Ndt) 
 	double mypplex, llike=0, p1, p2, Z, pwd;
 	double *zwt = dvec(T);
 
-	for (t=0;t<T;t++) for (zwt[t]=0, i=0;i<W;i++) zwt[t]+=Nwt[i][t];
+	for (t = 0; t < T; t++)
+		for (zwt[t] = 0, i = 0; i < W; i++)
+			zwt[t] += Nwt[i][t];
 
-	for (i=0;i<N;i++) {
-		Z=pwd=0;
-		for (t=0;t<T;t++) {
-			p1=Nwt[w[i]][t]; p2=Ndt[d[i]][t]; Z+=p2;
-			pwd += p1*p2/zwt[t];
+	for (i = 0; i < N; i++) {
+		Z = pwd = 0;
+		for (t = 0; t < T; t++) {
+			p1 = Nwt[w[i]][t];
+			p2 = Ndt[d[i]][t];
+			Z += p2;
+			pwd += p1 * p2 / zwt[t];
 		}
-		llike += log( pwd/Z );
+		llike += log( pwd / Z );
 	}
 
-	mypplex = exp(-llike/N);
+	mypplex = exp(-llike / N);
 
 	return mypplex;
 }

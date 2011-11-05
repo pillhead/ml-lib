@@ -12,6 +12,10 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <math.h>
+#include <time.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <unistd.h>
 
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -89,5 +93,13 @@ void read_ldac(char *fname, int *d, int *w, int *D, int *W) ;
 int countN_ldac(char *fname);
 void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt);
 void write_matrix(int nr, int nc, double **x, char *fname);
+void write_matrix_transpose(int nr, int nc, double **x, char *fname);
+void read_doc_word_counts_ldac(char *fname, int *d);
+void sample_doc_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double *Ndt, double *Nt, int *order, double **prior_Nwt);
+void randomassignment_for_doc(int N, int T, int *w, int *d, int *z, double **Nwt, double *Ndt, double *Nt);
+void init_random_generator();
+void free_random_generator();
+double sample_uniform();
+unsigned int sample_uniform_int(unsigned int K);
 
 #endif

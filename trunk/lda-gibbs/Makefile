@@ -1,10 +1,14 @@
-CC=gcc
-CFLAGS=-c -Wall -O3
-LDFLAGS=-lm -O3
+CC = g++ -Wall -O3
+LDFLAGS = -lgsl -lm -lgslcblas
 
-all: topicmodel
+GSL_INCLUDE = /usr/include/gsl
+GSL_LIB = /usr/lib64
 
-topicmodel: topicmodel.o tlib.o
+LSOURCE =  tlib.c topicmodel.c
+LHEADER =  tlib.h
+
+topicmodel: $(LSOURCE) $(LHEADER)
+	$(CC)  -I$(GSL_INCLUDE) -L$(GSL_LIB) $(LSOURCE) -o $@ $(LDFLAGS)
 
 clean:
-	rm -rf *.o topicmodel
+	rm -f *.o topicmodel

@@ -145,19 +145,20 @@ void LDAPPMModel::init_beta(string beta_counts_file){
 void LDAPPMModel::save_state(string state_name){
 
 	if (this->burn_in_period_ > 0){ // handles burn in period
-		this->beta_samples_mean_.save(state_name + "_beta_samples_mean.dat", raw_ascii);
-		this->theta_samples_mean_.save(state_name + "_theta_samples_mean.dat", raw_ascii);
-		this->beta_counts_mean_.save(state_name + "_beta_counts_mean.dat", raw_ascii);
-		this->theta_counts_mean_.save(state_name + "_theta_counts_mean.dat", raw_ascii);
+		this->beta_samples_mean_.save(state_name + "_beta_samples_mean", raw_ascii);
+		this->theta_samples_mean_.save(state_name + "_theta_samples_mean", raw_ascii);
+		this->beta_counts_mean_.save(state_name + "_beta_counts_mean", raw_ascii);
+		this->theta_counts_mean_.save(state_name + "_theta_counts_mean", raw_ascii);
 	}
 	else {
 		mat post_beta_counts = this->prior_beta_counts_ + this->beta_counts_;
-		post_beta_counts.save(state_name + "_beta_counts.dat", raw_ascii);
-		this->beta_sample_.save(state_name + "_beta_samples.dat", raw_ascii);
-		this->theta_counts_.save(state_name + "_theta_counts.dat", raw_ascii);
-		this->theta_sample_.save(state_name + "_theta_samples.dat", raw_ascii);
+		post_beta_counts.save(state_name + "_beta_counts", raw_ascii);
+		this->beta_sample_.save(state_name + "_beta_samples", raw_ascii);
+		this->theta_counts_.save(state_name + "_theta_counts", raw_ascii);
+		this->theta_sample_.save(state_name + "_theta_samples", raw_ascii);
 	}
-
+	this->beta_counts_.save(state_name + "_beta_counts_last", raw_ascii);
+	this->theta_counts_.save(state_name + "_theta_counts_last", raw_ascii);
 }
 
 
@@ -180,28 +181,34 @@ vec LDAPPMModel::calc_partition_counts (vector<size_t> indices){
  *
  */
 
-void LDAPPMModel::run_gibbs ()
+void LDAPPMModel::run_gibbs (string output_prefix)
 {
 	vector < size_t > word_indices;
-	vector < size_t > unique_words;
 	vec theta_d;
 	size_t bp_count = 0;
 	Timer t = Timer();
 	long double total_time_taken = 0.0;
+	double pp = 0.0;
+
+
+	ofstream myfile;
+	string str = output_prefix + "_model_info";
+	myfile.open(str.c_str());
+
+	myfile << "Gibbs sampling" << endl;
 
 	// START GIBBS ITERATIONS
 
 	for (size_t iter = 0; iter < this->max_iterations_; iter++){
 
-		if (this->verbose_ >= 1){
-			t.restart_time();
-			cout << "iter #" << iter + 1;
-		}
+		t.restart_time();
+
+		if (this->verbose_ >= 1) cout << "iter #" << iter + 1;
+		myfile << "iter #" << iter + 1;
 
 		for (size_t d = 0; d < this->num_documents_; d++){ // for each document
 
 			word_indices = this->document_word_indices_[d];
-			unique_words = this->document_unique_words_[d];
 
 			// Gibbs sampling for beta
 			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
@@ -234,22 +241,17 @@ void LDAPPMModel::run_gibbs ()
 			this->z_bp_.col(bp_count) = this->z_;
 			this->beta_samples_mean_ += this->beta_sample_;
 			this->theta_samples_mean_ += this->theta_sample_;
-			this->beta_counts_mean_ += this->prior_beta_counts_ + this->beta_counts_;
+			this->beta_counts_mean_ += this->prior_beta_counts_ + this->beta_counts_; // TODO need to make sure whether it's right
+			this->beta_counts_mean_ += this->beta_counts_;
 			this->theta_counts_mean_ += this->theta_counts_;
 
 			bp_count++;
 		}
 
+		total_time_taken += t.get_time();
 
-		if (this->verbose_ == 2){
-			cout << " model perplexity: " << calc_corpus_perplexity();
-			cout << " ln partition prob: " << calc_ln_corpus_partition_probality();
-		}
-
-		if (this->verbose_ >= 1){
-			total_time_taken += t.get_time();
-			cout << " time: " << t.get_time() << "\n";
-		}
+		if (this->verbose_ >= 1) cout << " time: " << t.get_time() << "\n";
+		myfile << " time: " << t.get_time() << "\n";
 	}
 
 	// END GIBBS ITERATIONS
@@ -263,60 +265,78 @@ void LDAPPMModel::run_gibbs ()
 		this->z_mode_ = find_mode(this->z_bp_);
 	}
 
-	if (this->verbose_ >= 1)
-		cout << endl << "Total execution time: "
-		<< total_time_taken << "s" << endl;
 
+	if (this->burn_in_period_ > 0){
+		pp = calc_corpus_perplexity();
+		myfile << endl << "Total execution time: " << total_time_taken << "s" << endl;
+		myfile << "Model perplexity: " << pp << endl;
+	}
+
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
+		if (this->burn_in_period_ > 0) cout << "Model perplexity: " << pp << endl; // using beta_counts_mean_ and theta_counts_mean_
+	}
+
+	myfile.close();
 }
 
 
 // Runs Gibbs sampler for all documents in the corpus in an incremental basis
 
-void LDAPPMModel::run_incremental_gibbs ()
+void LDAPPMModel::run_incremental_gibbs (string output_prefix)
 {
 	vector < size_t > word_indices;
 	vec theta_d;
 	size_t bp_count = 0;
 	mat beta_counts = zeros(this->num_topics_, this->vocabulary_size_);
+	mat doc_beta_counts = zeros(this->num_topics_, this->vocabulary_size_);
 	mat beta_sample;
+	Timer t = Timer();
+	long double total_time_taken = 0.0;
+	double pp = 0.0;
+	double period = 0.0;
+	ofstream myfile;
+	string str = output_prefix + "_model_info";
+	myfile.open(str.c_str());
+
+	myfile << "Gibbs sampling" << endl;
+
+	this->beta_counts_.fill(0);
 
 	for (size_t d = 0; d < this->num_documents_; d++){ // for each document
 
+		t.restart_time();
+
+		if (this->verbose_ >= 1) cout << "doc #" << d + 1;
+		myfile << "doc #" << d + 1;
+
 		word_indices = this->document_word_indices_[d];
 		bp_count = 0;
+		doc_beta_counts.fill(0);
 
 		// START GIBBS ITERATIONS
 
 		for (size_t iter = 0; iter < this->max_iterations_; iter++){
 
-			if (this->verbose_ >= 1)
-				cout << "doc #" << d << " iter #" << iter + 1 << endl;
-
-			// updates theta and beta counts
-			this->theta_counts_.col(d) = calc_partition_counts(word_indices);
+			// Gibbs sampling for beta
 
 			beta_counts.fill(0);
 			for(size_t i = 0; i < this->document_lengths_[d]; i++)
 				beta_counts(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) += 1;
 
-
-			// Gibbs sampling for beta
 			beta_sample = this->prior_beta_counts_ + beta_counts + this->eta_;
 			for(size_t k = 0; k < this->num_topics_; k++)
-				beta_sample.row(k) = sample_dirichlet_row_vec(
-						this->vocabulary_size_, beta_sample.row(k));
+				beta_sample.row(k) = sample_dirichlet_row_vec(this->vocabulary_size_, beta_sample.row(k));
 
 
 			// Gibbs sampling for theta
-
-			this->theta_sample_.col(d) = sample_dirichlet_col_vec(
-					this->num_topics_, this->theta_counts_.col(d) + this->alpha_);
+			this->theta_counts_.col(d) = calc_partition_counts(word_indices);
+			this->theta_sample_.col(d) = sample_dirichlet_col_vec(this->num_topics_, this->theta_counts_.col(d) + this->alpha_);
 
 
 			//  Gibbs sampling for Z (word topic selection)
 			for(size_t i = 0; i < this->document_lengths_[d]; i++)
-				this->z_(word_indices[i]) = sample_multinomial(
-						this->theta_sample_.col(d) % beta_sample.col(this->word_ids_(word_indices[i])));
+				this->z_(word_indices[i]) = sample_multinomial(this->theta_sample_.col(d) % beta_sample.col(this->word_ids_(word_indices[i])));
 
 
 			// Handles burn in period
@@ -325,10 +345,19 @@ void LDAPPMModel::run_incremental_gibbs ()
 				for (size_t di = 0; di < this->document_lengths_[d]; di++)
 					this->z_bp_(word_indices[di], bp_count) = this->z_(word_indices[di]);
 				this->theta_samples_mean_.col(d) += this->theta_sample_.col(d);
+				doc_beta_counts += beta_counts;
 				bp_count++;
 			}
 
 		}
+
+		// END GIBBS ITERATIONS
+
+		period = t.get_time();
+		total_time_taken += period;
+
+		if (this->verbose_ >= 1) cout << " exec time: " << period << "\n";
+		myfile << " exec time: " << period << "\n";
 
 		// Handles burn in period for all a document
 		if (this->burn_in_period_ > 0){
@@ -336,47 +365,57 @@ void LDAPPMModel::run_incremental_gibbs ()
 			for (size_t di = 0; di < this->document_lengths_[d]; di++){
 				size_t z_mode = this->mode(this->z_bp_.row(word_indices[di]), bp_count);
 				this->z_mode_(word_indices[di]) = z_mode;
-				this->prior_beta_counts_(z_mode, this->word_ids_(word_indices[di])) += 1;
 			}
-
+			this->beta_counts_mean_ += (doc_beta_counts / bp_count); // adds document
 			this->theta_samples_mean_.col(d) /= bp_count;
 		}
 		else {
 			for (size_t di = 0; di < this->document_lengths_[d]; di++)
-				this->prior_beta_counts_(this->z_(word_indices[di]), this->word_ids_(word_indices[di])) += 1; // considers only the final Z
+				this->beta_counts_(this->z_(word_indices[di]), this->word_ids_(word_indices[di])) += 1; // considers only the final Z
 		}
-
-
-		// END GIBBS ITERATIONS
 
 	} // for each document
 
 	// Handles burn in for all documents
 	if (this->burn_in_period_ > 0){
 
+		this->beta_counts_mean_ += this->prior_beta_counts_; // aggregate with prior; check whether it's invalid TODO
 		// Here the beta matrix calculation is different from
 		// the full or online (batch) Gibbs sampler;
 		for(size_t k = 0; k < this->num_topics_; k++)
 			this->beta_samples_mean_.row(k) = sample_dirichlet_row_vec(
 					this->vocabulary_size_,
-					this->prior_beta_counts_.row(k) + this->eta_);
+					this->beta_counts_mean_.row(k) + this->eta_);
 
-		this->beta_counts_ = this->prior_beta_counts_;
-		this->beta_sample_ = this->beta_samples_mean_;
+//		this->beta_counts_ = this->beta_counts_mean_;
+//		this->beta_sample_ = this->beta_samples_mean_;
 
 	}
 	else {
 
-		this->beta_counts_ = this->prior_beta_counts_;
+		this->beta_counts_ += this->prior_beta_counts_;
 
 		for(size_t k = 0; k < this->num_topics_; k++)
 			this->beta_sample_.row(k) = sample_dirichlet_row_vec(
 					this->vocabulary_size_,
-					this->prior_beta_counts_.row(k) + this->eta_);
+					this->beta_counts_.row(k) + this->eta_);
 
 	}
 
+	myfile << endl << "Total execution time: " << total_time_taken << "s" << endl;
+	if (this->burn_in_period_ > 0){
+		pp = calc_corpus_perplexity();
+		myfile << "Model perplexity: " << pp  << endl;
+	}
+
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
+		if (this->burn_in_period_ > 0) 	cout << "Model perplexity: " << pp << endl;
+	}
+
 }
+
+
 
 void LDAPPMModel::run_gibbs_with_KL(string output_prefix)
 {
@@ -494,6 +533,12 @@ void LDAPPMModel::run_gibbs_with_KL(string output_prefix)
 
 }
 
+/**
+ * Calculates the corpus perplexity (uses beta and theta mean)
+ *
+ * Ref: LDA Gibbs implementation by David Newman
+ *
+ */
 
 double LDAPPMModel::calc_corpus_perplexity() {
 
@@ -502,15 +547,17 @@ double LDAPPMModel::calc_corpus_perplexity() {
 
 	// Calculates number of words assigned to each topic
 	for (size_t t = 0; t < this->num_topics_; t++)
-		partition_counts(t) = accu(this->theta_counts_.row(t)) + this->eta_;
+		partition_counts(t) = accu(this->beta_counts_mean_.row(t)) + this->eta_;
 
-	partition_counts += 1e-24;
+	// partition_counts += 1e-24;
 
 	for (size_t i = 0; i < this->num_word_instances_; i++) {
+
 		Z = prob_wd = 0;
+
 		for (size_t t = 0; t < this->num_topics_; t++) {
-			p1 = this->beta_counts_(t, this->word_ids_(i)) + this->eta_;
-			p2 = this->theta_counts_(t, this->document_indices_(i)) + this->alpha_;
+			p1 = this->beta_counts_mean_(t, this->word_ids_(i)) + this->eta_;
+			p2 = this->theta_counts_mean_(t, this->document_indices_(i)) + this->alpha_;
 			Z += p2;
 			prob_wd += p1 * p2 / partition_counts(t);
 		}
@@ -523,9 +570,10 @@ double LDAPPMModel::calc_corpus_perplexity() {
 	return perplexity;
 }
 
+
 /*
  * This function calculates partition
- * probability for a document.
+ * probability for the corpus.
  *
  */
 double LDAPPMModel::calc_ln_corpus_partition_probality() {
@@ -533,14 +581,14 @@ double LDAPPMModel::calc_ln_corpus_partition_probality() {
 	double partition_probability = 0.0;
 
 	// Calculate partition counts from  m_ji' s; i' = 1 ... V
-	vec partition_counts = sum(this->beta_counts_, 1); // sums over rows
+	vec partition_counts = sum(this->beta_counts_mean_, 1); // sums over rows
 
 	// ln_gamma (n_j + alpha_j)
 	vec ln_gamma_Nj = log_gamma_vec(partition_counts + this->alpha_);
 
 	vec ln_gamma_Mj = zeros<vec> (this->num_topics_);
 	for (size_t t = 0; t < this->num_topics_; t++)
-		ln_gamma_Mj(t) = sum(log_gamma_rowvec(this->beta_counts_.row(t)	+ this->eta_));
+		ln_gamma_Mj(t) = sum(log_gamma_rowvec(this->beta_counts_mean_.row(t)	+ this->eta_));
 
 	partition_probability = accu(ln_gamma_Nj + ln_gamma_Mj); // sum over all j s
 

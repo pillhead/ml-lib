@@ -71,8 +71,8 @@ public:
 			string beta_file);
 	virtual ~LDAPPMModel();
 
-	void run_gibbs();
-	void run_incremental_gibbs();
+	void run_gibbs(string output_prefix);
+	void run_incremental_gibbs(string output_prefix);
 	void run_gibbs_with_KL(string output_prefix);
 	void save_state(string state_name);
 	double calc_corpus_perplexity();

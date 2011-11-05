@@ -24,8 +24,8 @@ TopicSearch::TopicSearch(string data_file,
 	this->alpha_vec_ = ones<vec>(this->num_topics_) * alpha;
 	this->theta_counts_ = zeros<mat>(this->num_topics_, this->num_documents_);
 	this->beta_counts_ = zeros<mat>(this->num_topics_, this->vocabulary_size_);
-	this->theta_counts_final_ = zeros<mat>(this->num_topics_, this->num_documents_);
-	this->beta_counts_final_ = zeros<mat>(this->num_topics_, this->vocabulary_size_);
+	this->theta_counts_last_ = zeros<mat>(this->num_topics_, this->num_documents_);
+	this->beta_counts_last_ = zeros<mat>(this->num_topics_, this->vocabulary_size_);
 	this->burn_in_period_ = burn_in_period;
 
 	// TODO: broken when run --algorithm ts_hrw --data /home/clint/Dropbox/TREC/query/1/1.supertweets --vocab /home/clint/Dropbox/TREC/query/1/1.vocabulary --data_format ldac --saved_beta /home/clint/Dropbox/TREC/batch/1/hdp-topics.dat --max_iter 50 --burn_in 40 --output_prefix ts --output_dir /home/clint/Dropbox/TREC/query/1
@@ -40,37 +40,37 @@ TopicSearch::~TopicSearch() {
 
 void TopicSearch::save_state(string state_name){
 
-	this->beta_counts_.save(state_name + "_beta_counts.dat", raw_ascii);
-	this->theta_counts_.save(state_name + "_theta_counts.dat", raw_ascii);
+	this->beta_counts_.save(state_name + "_beta_counts", raw_ascii);
+	this->theta_counts_.save(state_name + "_theta_counts", raw_ascii);
 
-	// Generates Dirichlet samples for Theta
-	mat theta_sample = this->theta_counts_;
-	for(size_t d = 0; d < this->num_documents_; d++)
-		theta_sample.col(d) = sample_dirichlet_col_vec(this->num_topics_, theta_sample.col(d) + this->alpha_vec_ + 1);
-	theta_sample.save(state_name + "_theta_samples.dat", raw_ascii);
-
-	// Generates Dirichlet samples for Beta
-	mat beta_sample = this->beta_counts_;
-	for(size_t k = 0; k < this->num_topics_; k++)
-		beta_sample.row(k) = sample_dirichlet_row_vec(this->vocabulary_size_, beta_sample.row(k));
-	beta_sample.save(state_name + "_beta_samples.dat", raw_ascii);
+//	// Generates Dirichlet samples for Theta
+//	mat theta_sample = this->theta_counts_;
+//	for(size_t d = 0; d < this->num_documents_; d++)
+//		theta_sample.col(d) = sample_dirichlet_col_vec(this->num_topics_, theta_sample.col(d) + this->alpha_vec_ + 1);
+//	theta_sample.save(state_name + "_theta_samples", raw_ascii);
+//
+//	// Generates Dirichlet samples for Beta
+//	mat beta_sample = this->beta_counts_;
+//	for(size_t k = 0; k < this->num_topics_; k++)
+//		beta_sample.row(k) = sample_dirichlet_row_vec(this->vocabulary_size_, beta_sample.row(k));
+//	beta_sample.save(state_name + "_beta_samples", raw_ascii);
 
 
 	// If we store the last Z sample
-	this->beta_counts_final_.save(state_name + "_beta_counts_last.dat", raw_ascii);
-	this->theta_counts_final_.save(state_name + "_theta_counts_last.data", raw_ascii);
+	this->beta_counts_last_.save(state_name + "_beta_counts_last", raw_ascii);
+	this->theta_counts_last_.save(state_name + "_theta_counts_last", raw_ascii);
 
-	// Generates Dirichlet samples for Beta
-	beta_sample = beta_counts_final_;
-	for(size_t k = 0; k < this->num_topics_; k++)
-		beta_sample.row(k) = sample_dirichlet_row_vec(this->vocabulary_size_, beta_sample.row(k));
-	beta_sample.save(state_name + "_beta_samples_last.dat", raw_ascii);
-
-	// Generates Dirichlet samples for Theta
-	theta_sample = theta_counts_final_;
-	for(size_t d = 0; d < this->num_documents_; d++)
-		theta_sample.col(d) = sample_dirichlet_col_vec(this->num_topics_, theta_sample.col(d) + this->alpha_vec_ + 1);
-	theta_sample.save(state_name + "_theta_samples_last.dat", raw_ascii);
+//	// Generates Dirichlet samples for Beta
+//	beta_sample = beta_counts_last_;
+//	for(size_t k = 0; k < this->num_topics_; k++)
+//		beta_sample.row(k) = sample_dirichlet_row_vec(this->vocabulary_size_, beta_sample.row(k));
+//	beta_sample.save(state_name + "_beta_samples_last", raw_ascii);
+//
+//	// Generates Dirichlet samples for Theta
+//	theta_sample = theta_counts_last_;
+//	for(size_t d = 0; d < this->num_documents_; d++)
+//		theta_sample.col(d) = sample_dirichlet_col_vec(this->num_topics_, theta_sample.col(d) + this->alpha_vec_ + 1);
+//	theta_sample.save(state_name + "_theta_samples_last", raw_ascii);
 
 }
 
@@ -86,6 +86,12 @@ void TopicSearch::save_theta(string state_name){
 		theta_sample.col(d) = sample_dirichlet_col_vec(this->num_topics_, theta_sample.col(d) + this->alpha_vec_ + 1);
 	theta_sample = trans(theta_sample);
 	theta_sample.save(state_name + "_theta", raw_ascii);
+
+}
+
+void TopicSearch::save_beta(string state_name){
+
+	this->beta_counts_.save(state_name + "_beta_counts", raw_ascii);
 
 }
 
@@ -165,10 +171,8 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 	init_temperature = max(init_temperature, 1.0);
 	vec iter_temperature = zeros<vec> (this->max_iterations_);
 	for (size_t iter = 0; iter < this->max_iterations_; iter++)
-		iter_temperature(iter) = max(
-				final_temperature,
-				init_temperature * pow(final_temperature / init_temperature,
-						((iter + 1) / this->max_iterations_)));
+		iter_temperature(iter) = max(final_temperature,
+				init_temperature * pow(final_temperature / init_temperature, ((iter + 1) / this->max_iterations_)));
 
 	run_hybrid_random_walk_simulated_annealing_uniform(
 			iter_temperature,
@@ -297,12 +301,12 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 //		for (size_t n = 0; n < num_words; n++){
 //			this->sampled_z_(word_indices[n]) = sampled_z(n);
 //			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
-//			this->beta_counts_final_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
+//			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
 //		}
 
 		// Calculates theta counts
 		this->theta_counts_.col(d) = calc_topic_counts(sampled_z, this->num_topics_);
-		this->theta_counts_final_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
+		this->theta_counts_last_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
 
 		// Resets all used data structures
 		current_Z.reset();
@@ -330,8 +334,6 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
     Timer timer = Timer();
 	timer.restart_time();
 
-
-
 	init_z();
 
 	if (this->burn_in_period_ > 0 && this->burn_in_period_ < this->max_iterations_){
@@ -347,64 +349,80 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 
 	for (size_t d = 0; d < this->num_documents_; d++){ // START For each document
 
-		size_t num_words = this->document_lengths_[d];
-		umat accepted_Z = zeros<umat>(num_words, accepted_Z_instances);
-		vec accepted_Z_pp = zeros<vec>(accepted_Z_instances);
-		uvec proposed_Z = zeros<uvec>(num_words);
-		uvec current_Z = zeros<uvec>(num_words);
-		size_t acceptance_count = 0;
-		size_t count = 0;
-		size_t random_walk_count = ceil((percent_random_walk / 100) * num_words);
+		size_t num_words 				= this->document_lengths_[d];
+		umat accepted_Z 				= zeros<umat>(num_words, accepted_Z_instances);
+		vec accepted_Z_pp 				= zeros<vec>(accepted_Z_instances);
+		uvec proposed_Z 				= zeros<uvec>(num_words);
+		uvec current_Z 					= zeros<uvec>(num_words);
+		size_t acceptance_count 		= 0;
+		size_t count 					= 0;
+		size_t random_walk_count 		= ceil((percent_random_walk / 100) * num_words);
+		size_t num_random_walks			= 0;
 		uvec sampled_z;
 		uvec sampled_z2;
-		vector <size_t> word_indices = this->document_word_indices_[d];
+		vector <size_t> word_indices 	= this->document_word_indices_[d];
+		long double ppZ;
+		long double ppZ_prime;
+		long double p_ratio;
+		double acceptance_probability;
 
 		for (size_t n = 0; n < num_words; n++)
-			current_Z(n) = this->initial_z_(word_indices[n]);
+			current_Z(n) 				= this->initial_z_(word_indices[n]);
 
-		long double ppZ = calc_partition_probality(word_indices, current_Z);
+		ppZ 							= calc_partition_probality(word_indices, current_Z);
 
 		for (size_t iter = 0; iter < this->max_iterations_; iter++){ // START TOPIC SEARCH
 
 			if (this->sample_uniform() <= random_walk_prob){ // do random walk from the previous state
-				proposed_Z = current_Z;
+//			if (drand48() <= random_walk_prob){ // do random walk from the previous state
+
+				num_random_walks++;
+				proposed_Z 				= current_Z;
+
 				for (size_t s = 0; s < random_walk_count; s++){
-					size_t idx = sample_uniform_int(num_words); // selects a word at random
+
+					size_t idx 			= sample_uniform_int(num_words); // selects a word at random
+
 					while(1){
-						size_t topic = sample_uniform_int(this->num_topics_);
+						size_t topic 	= sample_uniform_int(this->num_topics_);
 						if (topic != current_Z(idx)){
 							proposed_Z(idx) = topic;
 							break;
 						}
 					}
+
 				}
+
 			}
 			else { // do sample from a uniform
+
 				for (size_t i = 0; i < num_words; i++)
-					proposed_Z(i) = sample_uniform_int(this->num_topics_);
+					proposed_Z(i) 		= sample_uniform_int(this->num_topics_);
+
 			}
 
-			long double ppZ_prime = calc_partition_probality(word_indices, proposed_Z);
-			long double p_ratio = ppZ_prime - ppZ;
-			double acceptance_probability = min(1.0L, pow(exp(p_ratio), (1 / iter_temperature(iter)))); // MH acceptance probability
+			ppZ_prime 					= calc_partition_probality(word_indices, proposed_Z);
+			p_ratio 					= ppZ_prime - ppZ;
+			assert(iter_temperature(iter) > 0);
+			acceptance_probability 		= min(1.0L, pow(exp(p_ratio), (1 / iter_temperature(iter)))); // MH acceptance probability
 
 			if (this->sample_uniform() <= acceptance_probability){
-				current_Z = proposed_Z;
-				ppZ = ppZ_prime;
+//			if (drand48() <= acceptance_probability){
+				current_Z 				= proposed_Z;
+				ppZ 					= ppZ_prime;
 				acceptance_count++;
-				if (this->verbose_ >= 1){
-					cout << "doc " << d + 1 << " iter " << iter + 1;
-					cout << " accepted";
-					cout << " [a.p. = " << pow(exp(p_ratio), (1 / iter_temperature(iter)))
-							<< " ln P(z') = " << ppZ_prime << " ln P(z) = " << ppZ
-							<< " a.count = " << acceptance_count << " ]" << endl;
-				}
+//				if (this->verbose_ >= 1){
+//					cout << "doc " << d + 1 << " iter " << iter + 1;
+//					cout << " accepted";
+//					cout << " [a.p. = " << pow(exp(p_ratio), (1 / iter_temperature(iter)))
+//							<< " ln P(z') = " << ppZ_prime << " ln P(z) = " << ppZ
+//							<< " a.count = " << acceptance_count << " ]" << endl;
+//				}
 			}
 
-			if (((iter + 1) % this->spacing == 0)
-					&& (!valid_burn_in_period || (valid_burn_in_period && (this->burn_in_period_ < iter)))) {
-				accepted_Z.col(count) = current_Z;
-				accepted_Z_pp(count) = ppZ_prime;
+			if (((iter + 1) % this->spacing == 0) && (!valid_burn_in_period || (valid_burn_in_period && (this->burn_in_period_ < iter)))) {
+				accepted_Z.col(count) 	= current_Z;
+				accepted_Z_pp(count) 	= ppZ_prime;
 				count++;
 			}
 
@@ -412,17 +430,19 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 
 
 		// Saves the results to the class variable
-		sampled_z = find_mode(accepted_Z);
-		sampled_z2 = accepted_Z.col(count - 1);
-//		for (size_t n = 0; n < num_words; n++){
-//			this->sampled_z_(word_indices[n]) = sampled_z(n);
-//			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
-//			this->beta_counts_final_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
-//		}
+		sampled_z 						= find_mode(accepted_Z);
+		sampled_z2 						= accepted_Z.col(count - 1);
+
+		for (size_t n = 0; n < num_words; n++){
+			this->sampled_z_(word_indices[n]) = sampled_z(n);
+			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
+			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
+		}
+
 
 		// Calculates theta counts
-		this->theta_counts_.col(d) = calc_topic_counts(sampled_z, this->num_topics_);
-		this->theta_counts_final_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
+		this->theta_counts_.col(d) 		= calc_topic_counts(sampled_z, this->num_topics_);
+		this->theta_counts_last_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
 
 
 		// Resets all used data structures
@@ -432,13 +452,85 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 		sampled_z.reset();
 		sampled_z2.reset();
 
+		if (this->verbose_ >= 1)
+			cout << "doc " << d + 1 << " accepted # " << acceptance_count << " random walks # " << num_random_walks << endl;
+
 	} // END For each document
 
 
-	if (this->verbose_ >= 1)
-		cout << endl << "Total time taken: " << timer.get_time() << "s" << endl;
 
+
+
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << timer.get_time() << "s" << endl;
+		cout << "Model perplexity: " << calc_corpus_perplexity() << endl; // using beta_counts_ and theta_counts_
+		cout << "Log partition probability: " << calc_ln_corpus_partition_probality() << endl;
+	}
 }
+
+
+/**
+ * Calculates the corpus perplexity (uses beta and theta mean)
+ *
+ * Ref: LDA Gibbs implementation by David Newman
+ *
+ */
+
+double TopicSearch::calc_corpus_perplexity() {
+
+	double perplexity, ln_likelihood = 0, p1, p2, Z, prob_wd;
+	vec partition_counts = zeros<vec> (this->num_topics_);
+
+	// Calculates number of words assigned to each topic
+	for (size_t t = 0; t < this->num_topics_; t++)
+		partition_counts(t) = accu(this->beta_counts_.row(t)) + 1e-24;
+
+
+	for (size_t i = 0; i < this->num_word_instances_; i++) {
+
+		Z = prob_wd = 0;
+
+		for (size_t t = 0; t < this->num_topics_; t++) {
+			p1 = this->beta_counts_(t, this->word_ids_(i)) + 1e-24;
+			p2 = this->theta_counts_(t, this->document_indices_(i)) + this->alpha_vec_(t);
+			Z += p2;
+			prob_wd += p1 * p2 / partition_counts(t);
+		}
+
+		ln_likelihood += log(prob_wd / Z);
+	}
+
+	perplexity = exp(-ln_likelihood / this->num_word_instances_);
+
+	return perplexity;
+}
+
+
+/*
+ * This function calculates partition
+ * probability for the corpus.
+ *
+ */
+double TopicSearch::calc_ln_corpus_partition_probality() {
+
+	double partition_probability = 0.0;
+
+	// Calculate partition counts from  m_ji' s; i' = 1 ... V
+	vec partition_counts = sum(this->beta_counts_, 1); // sums over rows
+
+	// ln_gamma (n_j + alpha_j)
+	vec ln_gamma_Nj = log_gamma_vec(partition_counts + this->alpha_vec_);
+
+	vec ln_gamma_Mj = zeros<vec> (this->num_topics_);
+	for (size_t t = 0; t < this->num_topics_; t++)
+		ln_gamma_Mj(t) = sum(log_gamma_rowvec(this->beta_counts_.row(t)	+ 1e-24));
+
+	partition_probability = accu(ln_gamma_Nj + ln_gamma_Mj); // sum over all j s
+
+	return partition_probability;
+}
+
+
 
 
 
