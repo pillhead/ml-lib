@@ -66,10 +66,13 @@ std::string LDAPPMBase::to_string(T const& value) {
 
 void LDAPPMBase::init_random_generator(){
 
-	random_num_generator_ = gsl_rng_alloc (gsl_rng_ranlux);     		// pick random number generator
+	random_num_generator_ = gsl_rng_alloc (gsl_rng_mt19937);     		// pick random number generator
 	random_seed_ = time (NULL) * getpid();								// seed
 
 	gsl_rng_set (random_num_generator_, random_seed_);                  // sets seed
+
+	/* initialize random seed: */
+	// srand ( time(NULL) );
 
 }
 
@@ -114,6 +117,7 @@ double LDAPPMBase::sample_beta(double a, double b){
 
 size_t LDAPPMBase::sample_uniform_int(size_t K){
 	return (size_t) gsl_rng_uniform_int(random_num_generator_, K);
+	// return (size_t) (drand48() * (double)K); // To speedup
 }
 
 double LDAPPMBase::sample_uniform(){
@@ -148,6 +152,22 @@ rowvec LDAPPMBase::log_gamma_rowvec(rowvec x_vec){
 
 size_t LDAPPMBase::sample_multinomial (vec theta) {
 
+	size_t t = 0;
+	double total_prob = accu(theta);
+	double u = gsl_rng_uniform(random_num_generator_) * total_prob;
+	double cumulative_prob = theta(0);
+
+	while(u > cumulative_prob){
+		t++;
+		cumulative_prob += theta(t);
+	}
+
+	return t;
+
+}
+
+size_t LDAPPMBase::sample_multinomial2 (vec theta) {
+
 	register unsigned int i,t;
 	register unsigned int num_elements = theta.n_elem;
 	unsigned int z[num_elements];
@@ -171,7 +191,21 @@ size_t LDAPPMBase::sample_multinomial (vec theta) {
 }
 
 
+
 vec LDAPPMBase::sample_dirichlet_col_vec (size_t num_elements, vec alpha){
+
+	vec dirichlet_sample = zeros<vec>(num_elements);
+
+	for ( register unsigned int i = 0; i < num_elements; i++ )
+		dirichlet_sample(i) = gsl_ran_gamma (random_num_generator_, alpha(i), 1.0);
+
+	dirichlet_sample /= accu(dirichlet_sample);
+
+	return dirichlet_sample;
+
+}
+
+vec LDAPPMBase::sample_dirichlet_col_vec2 (size_t num_elements, vec alpha){
 
 	vec dirichlet_sample = zeros<vec>(num_elements);
 	double theta[num_elements];
@@ -194,6 +228,19 @@ vec LDAPPMBase::sample_dirichlet_col_vec (size_t num_elements, vec alpha){
 rowvec LDAPPMBase::sample_dirichlet_row_vec (size_t num_elements, rowvec alpha){
 
 	rowvec dirichlet_sample = zeros<rowvec>(num_elements);
+
+	for ( register unsigned int i = 0; i < num_elements; i++ )
+		dirichlet_sample(i) = gsl_ran_gamma (random_num_generator_, alpha(i), 1.0);
+
+	dirichlet_sample /= accu(dirichlet_sample);
+
+	return dirichlet_sample;
+
+}
+
+rowvec LDAPPMBase::sample_dirichlet_row_vec2 (size_t num_elements, rowvec alpha){
+
+	rowvec dirichlet_sample = zeros<rowvec>(num_elements);
 	double theta[num_elements];
 	double *alpha_d = new double[num_elements]();
 
@@ -210,28 +257,6 @@ rowvec LDAPPMBase::sample_dirichlet_row_vec (size_t num_elements, rowvec alpha){
 	return dirichlet_sample;
 
 }
-
-rowvec LDAPPMBase::sample_dirichlet_row_vec (rowvec alpha, vector <size_t> indices){
-
-	rowvec dirichlet_sample = ones<rowvec>(alpha.n_elem) * 1e-15;
-	register unsigned int sel_num_elements = indices.size();
-	double theta[sel_num_elements];
-	double *alpha_d = new double[sel_num_elements]();
-
-	for (register unsigned int v = 0; v < sel_num_elements; v++)
-		alpha_d[v] = alpha(indices[v]);
-
-	gsl_ran_dirichlet (random_num_generator_, sel_num_elements, alpha_d, theta);
-
-	delete []alpha_d;
-
-	for (register unsigned int i = 0; i < sel_num_elements; i++)
-		dirichlet_sample(indices[i]) = theta[i];
-
-	return dirichlet_sample;
-
-}
-
 
 /**
  * Counts number of lines in a given file

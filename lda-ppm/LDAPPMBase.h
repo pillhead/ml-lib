@@ -12,7 +12,7 @@
 #include <armadillo>
 #include <math.h>
 #include <map>
-
+#include <fstream>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_sf.h>
@@ -69,11 +69,13 @@ protected:
 
 	double sample_beta(double a, double b);
 	size_t sample_multinomial(vec theta);
+	size_t sample_multinomial2 (vec theta);
 	size_t sample_uniform_int(size_t K);
 	double sample_uniform();
 	rowvec sample_dirichlet_row_vec(size_t num_elements, rowvec alpha);
-	rowvec sample_dirichlet_row_vec (rowvec alpha, vector <size_t> indices);
+	rowvec sample_dirichlet_row_vec2(size_t num_elements, rowvec alpha);
 	vec sample_dirichlet_col_vec(size_t num_elements, vec alpha);
+	vec sample_dirichlet_col_vec2(size_t num_elements, vec alpha);
 	vec sample_stick_breaking_prior(size_t num_elements, double a, double b);
 	double log_gamma(double x);
 	vec log_gamma_vec(vec x_vec);

@@ -38,8 +38,8 @@ public:
 	uvec sampled_z_;
 	mat beta_counts_;
 	size_t burn_in_period_;
-	mat theta_counts_final_;
-	mat beta_counts_final_;
+	mat theta_counts_last_;
+	mat beta_counts_last_;
 
 	TopicSearch(string data_file,
 			string data_format,
@@ -65,6 +65,9 @@ public:
 	void run_hybrid_random_walk_simulated_annealing(double init_temperature, double final_temperature, double random_walk_prob, double percent_random_walk);
 	void save_state(string state_name);
 	void save_theta(string state_name);
+	void save_beta(string state_name);
+	double calc_corpus_perplexity();
+	double calc_ln_corpus_partition_probality();
 
 };
 

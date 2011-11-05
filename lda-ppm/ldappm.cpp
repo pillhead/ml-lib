@@ -54,7 +54,7 @@ void print_usage_and_exit()
     cout << "      --verbose:                  [0] - do not display log, [1] - display log to standard output, default 1\n";
 
     cout << "\n  topic search parameters:\n";
-    cout << "      --saved_beta:               saved beta samples\n";
+    cout << "      --saved_beta_counts:        saved beta counts\n";
     cout << "      --spacing:                  spacing between independent samples\n";
     cout << "      --init_temp:                initial temperature for simulated annealing\n";
     cout << "      --cool_temp:                cool down temperature for simulated annealing\n";
@@ -102,7 +102,6 @@ int main(int argc, char** argv)
 	double random_walk_prob = 0.70;
 	double percent_random_walk = 1.0;
 	size_t verbose = 1;
-
 
     for (int i = 1; i < argc; i++){
 
@@ -154,14 +153,14 @@ int main(int argc, char** argv)
         cout << "    output directory    = " << output_dir << endl;
         cout << "    verbose             = " << verbose << endl;
 
-        if (!algorithm.compare("lda_oi") || !algorithm.compare("lda_ob"))
+        if (!algorithm.compare("lda_oi") || !algorithm.compare("lda_ob") || !algorithm.compare("ts_hrw"))
         	cout << "    saved_beta_counts   = " << saved_beta_counts << endl;
 
         if (!algorithm.compare("ts_hrw")){
 			cout << "    spacing             = " << spacing << endl;
 			cout << "    init. temp.         = " << init_temp << endl;
 			cout << "    cool-down temp.     = " << cool_temp << endl;
-			cout << "    saved_beta          = " << saved_beta << endl;
+			// cout << "    saved_beta          = " << saved_beta << endl;
 			cout << "    random walk prob.   = " << random_walk_prob << endl;
 			cout << "    % of random walk    = " << percent_random_walk << endl;
         }
@@ -172,6 +171,7 @@ int main(int argc, char** argv)
 
     if (output_dir.compare("") && is_dir_exists(output_dir))
     	output_prefix = output_dir + "/" + output_prefix; // prefix with directory
+
 
 	if (!algorithm.compare("lda")){
 
@@ -189,7 +189,7 @@ int main(int argc, char** argv)
 		mdl.print_metadata();
 		if (verbose >= 1)
 			cout << "\nThe full Gibbs sampler - iterations\n================================\n";
-		mdl.run_gibbs();
+		mdl.run_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 
 	}
@@ -214,7 +214,7 @@ int main(int argc, char** argv)
 		mdl.set_verbose(verbose);
 		mdl.print_metadata();
 		mdl.print_message("\nThe full Gibbs sampler with a prior Beta (batch)\n ================================\n");
-		mdl.run_gibbs();
+		mdl.run_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 	}
 	else if (!algorithm.compare("lda_oi")){
@@ -235,14 +235,14 @@ int main(int argc, char** argv)
 				saved_beta_counts);
 		mdl.set_verbose(verbose);
 		mdl.print_message("\nThe full Gibbs sampler with a prior Beta (Incremental)\n ================================\n");
-		mdl.run_incremental_gibbs();
+		mdl.run_incremental_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 
 	}
 	else if (!algorithm.compare("ts_hrw")){
 
-		if (!saved_beta.compare("")) {
-	        cout << endl << "saved beta file is mandatory!\n";
+		if (!saved_beta_counts.compare("")) {
+	        cout << endl << "saved beta-counts file is mandatory!\n";
 	        exit(0);
 		}
 
@@ -250,7 +250,7 @@ int main(int argc, char** argv)
 				data_file,
 				data_format,
 				vocab_file,
-				saved_beta,
+				saved_beta_counts,
 				alpha,
 				max_iter,
 				spacing,
@@ -272,7 +272,7 @@ int main(int argc, char** argv)
 			ts_model.run_hybrid_random_walk(
 					random_walk_prob,
 					percent_random_walk);
-			ts_model.save_theta(output_prefix);
+			ts_model.save_state(output_prefix);
 		}
 
 	}
