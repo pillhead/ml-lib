@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
     if (output_prefix == NULL)
     	output_prefix = "lda";
 
-    sprintf(name, "%s_model_info", output_prefix);
+    sprintf(name, "%s_collapsed", output_prefix);
 	fp = fopen(name, "w");assert(fp);
 
 
@@ -112,14 +112,14 @@ int main(int argc, char* argv[])
 	printf("T          = %d\n", T);
 	printf("iterations = %d\n", iter);
 
-	fprintf(fp, "format     = %s\n", data_format);
-	fprintf(fp, "file name  = %s\n", file_name);
-	fprintf(fp, "seed       = %d\n", seed);
-	fprintf(fp, "N          = %d\n", N);
-	fprintf(fp, "W          = %d\n", W);
-	fprintf(fp, "D          = %d\n", D);
-	fprintf(fp, "T          = %d\n", T);
-	fprintf(fp, "iterations = %d\n", iter);
+//	fprintf(fp, "format     = %s\n", data_format);
+//	fprintf(fp, "file name  = %s\n", file_name);
+//	fprintf(fp, "seed       = %d\n", seed);
+//	fprintf(fp, "N          = %d\n", N);
+//	fprintf(fp, "W          = %d\n", W);
+//	fprintf(fp, "D          = %d\n", D);
+//	fprintf(fp, "T          = %d\n", T);
+//	fprintf(fp, "iterations = %d\n", iter);
 
 	init_random_generator();
 
@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
 		add_smooth_d(D, T, Ndt, alpha);
 		add_smooth_d(W, T, Nwt, beta);
 		add_smooth1d(T, Nt, W * beta);
-
+		fprintf(fp, "iter,time,perplexity\n");
 		for (i = 0; i < iter; i++) {
 
 			start_time = current_time();
@@ -226,8 +226,8 @@ int main(int argc, char* argv[])
 			total_time += period;
 
 			// printf("iter %d time: %.5fs perplexity: %.2f\n", i, period, pplex_d(N, W, T, w, d, Nwt, Ndt));
-			printf("iter %d time: %.5fs\n", i, period);
-			fprintf(fp, "iter %d time: %.5fs\n", i, period);
+			printf("iter %d time: %.5fs\n", i+1, period);
+			fprintf(fp, "%d,%.5f,%.5f\n", i+1, period, pplex_d(N, W, T, w, d, Nwt, Ndt));
 
 		}
 
@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
 
 	double pp = pplex_d(N, W, T, w, d, Nwt, Ndt);
 	printf("In-sample perplexity for %d documents = %.2f time taken = %.5fs\n", D, pp, total_time);
-	fprintf(fp, "In-sample perplexity for %d documents = %.2f time taken = %.5fs\n", D, pp, total_time);
+//	fprintf(fp, "In-sample perplexity for %d documents = %.2f time taken = %.5fs\n", D, pp, total_time);
 
 	fclose(fp);
 
