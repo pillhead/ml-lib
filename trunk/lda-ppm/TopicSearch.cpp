@@ -28,8 +28,6 @@ TopicSearch::TopicSearch(string data_file,
 	this->beta_counts_last_ = zeros<mat>(this->num_topics_, this->vocabulary_size_);
 	this->burn_in_period_ = burn_in_period;
 
-	// TODO: broken when run --algorithm ts_hrw --data /home/clint/Dropbox/TREC/query/1/1.supertweets --vocab /home/clint/Dropbox/TREC/query/1/1.vocabulary --data_format ldac --saved_beta /home/clint/Dropbox/TREC/batch/1/hdp-topics.dat --max_iter 50 --burn_in 40 --output_prefix ts --output_dir /home/clint/Dropbox/TREC/query/1
-
 }
 
 
@@ -187,10 +185,14 @@ void TopicSearch::run_hybrid_random_walk(
 
 	vec iter_temperature = ones<vec> (this->max_iterations_);
 
-	run_hybrid_random_walk_simulated_annealing_uniform(
+	run_hybrid_random_walk_simulated_annealing_uniform2(
 			iter_temperature,
 			random_walk_prob,
 			percent_random_walk);
+//	run_hybrid_random_walk_simulated_annealing(
+//			iter_temperature,
+//			random_walk_prob,
+//			percent_random_walk);
 
 }
 
@@ -229,17 +231,20 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 		size_t acceptance_count = 0;
 		size_t count = 0;
 		size_t random_walk_count = ceil((percent_random_walk / 100) * num_words);
+		size_t num_random_walks			= 0;
 		uvec sampled_z;
 		uvec sampled_z2;
 
 		vector <size_t> word_indices = this->document_word_indices_[d];
 		for (size_t n = 0; n < num_words; n++)
 			current_Z(n) = this->initial_z_(word_indices[n]);
-		long double ppZ = calc_partition_probality(word_indices, current_Z);
+		long double ppZ = calc_ln_partition_probality(word_indices, current_Z);
 
 		for (size_t iter = 0; iter < this->max_iterations_; iter++){ // START TOPIC SEARCH
 
 			if (this->sample_uniform() <= random_walk_prob){ // do random walk from the previous state
+
+				num_random_walks++;
 				proposed_Z = current_Z;
 				for (size_t s = 0; s < random_walk_count; s++){
 					size_t idx = sample_uniform_int(num_words); // selects a word at random
@@ -251,17 +256,20 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 						}
 					}
 				}
+
 			}
 			else { // do sample from the topic specific Multinomial
+
 				for (size_t i = 0; i < num_words; i++)
 					proposed_Z(i) = sample_multinomial(multinomial_prob.col(current_Z(i)));
+
 			}
 
-			long double ppZ_prime = calc_partition_probality(word_indices, proposed_Z);
+			long double ppZ_prime = calc_ln_partition_probality(word_indices, proposed_Z);
 
-			long double tpZ_prime = calc_hybrid_random_walk_transition_probability(
+			long double tpZ_prime = calc_lnTP_hybrid_randomwalk(
 					num_words, proposed_Z, current_Z, multinomial_prob, random_walk_prob, random_walk_count);
-			long double tpZ = calc_hybrid_random_walk_transition_probability(
+			long double tpZ = calc_lnTP_hybrid_randomwalk(
 					num_words, current_Z, proposed_Z, multinomial_prob, random_walk_prob, random_walk_count);
 			long double p_ratio = ppZ_prime - ppZ;
 			long double q_ratio = tpZ_prime - tpZ;
@@ -272,16 +280,16 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 				current_Z = proposed_Z;
 				acceptance_count++;
 
-				if (this->verbose_ >= 1){
-
-					cout << "doc " << d + 1 << " iter " << iter + 1;
-					cout << " accepted";
-					cout << " [a.p. = " << pow(exp(p_ratio + q_ratio), (1 / iter_temperature(iter)))
-							// << " t.ratio = " << exp(q_ratio) << " p.ratio = " << exp(p_ratio)
-							<< " ln P(z') = " << ppZ_prime << " ln P(z) = " << ppZ
-							<< " ln T(z',z) = " << tpZ_prime << " ln T(z,z') = " << tpZ
-							<< " a.count = " << acceptance_count << " ]" << endl;
-				}
+//				if (this->verbose_ >= 1){
+//
+//					cout << "doc " << d + 1 << " iter " << iter + 1;
+//					cout << " accepted";
+//					cout << " [a.p. = " << pow(exp(p_ratio + q_ratio), (1 / iter_temperature(iter)))
+//							// << " t.ratio = " << exp(q_ratio) << " p.ratio = " << exp(p_ratio)
+//							<< " ln P(z') = " << ppZ_prime << " ln P(z) = " << ppZ
+//							<< " ln T(z',z) = " << tpZ_prime << " ln T(z,z') = " << tpZ
+//							<< " a.count = " << acceptance_count << " ]" << endl;
+//				}
 
 			}
 
@@ -295,18 +303,42 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 		} // END TOPIC SEARCH
 
 
-		// Saves the results to the class variables
-		sampled_z = find_mode(accepted_Z);
-		sampled_z2 = accepted_Z.col(count - 1);
-//		for (size_t n = 0; n < num_words; n++){
-//			this->sampled_z_(word_indices[n]) = sampled_z(n);
-//			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
-//			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
-//		}
+//		// Saves the results to the class variables
+//		sampled_z = find_mode(accepted_Z);
+//		sampled_z2 = accepted_Z.col(count - 1);
+////		for (size_t n = 0; n < num_words; n++){
+////			this->sampled_z_(word_indices[n]) = sampled_z(n);
+////			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
+////			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
+////		}
+//
+//		// Calculates theta counts
+//		this->theta_counts_.col(d) = calc_topic_counts(sampled_z, this->num_topics_);
+//		this->theta_counts_last_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
+//
+//		// Resets all used data structures
+//		current_Z.reset();
+//		proposed_Z.reset();
+//		accepted_Z.reset();
+//		sampled_z.reset();
+//		sampled_z2.reset();
+
+
+		// Saves the results to the class variable
+		sampled_z 						= find_mode(accepted_Z);
+		sampled_z2 						= accepted_Z.col(count - 1);
+
+		for (size_t n = 0; n < num_words; n++){
+			this->sampled_z_(word_indices[n]) = sampled_z(n);
+			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
+			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
+		}
+
 
 		// Calculates theta counts
-		this->theta_counts_.col(d) = calc_topic_counts(sampled_z, this->num_topics_);
+		this->theta_counts_.col(d) 		= calc_topic_counts(sampled_z, this->num_topics_);
 		this->theta_counts_last_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
+
 
 		// Resets all used data structures
 		current_Z.reset();
@@ -315,10 +347,17 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing(
 		sampled_z.reset();
 		sampled_z2.reset();
 
+		if (this->verbose_ >= 1)
+			cout << "doc " << d + 1 << " accepted # " << acceptance_count << " random walks # " << num_random_walks << endl;
+
 	} // END For each document
 
-	if (this->verbose_ >= 1)
-		cout << endl << "Total time taken: " << timer.get_time() << "s" << endl;
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << timer.get_time() << "s" << endl;
+		cout << "Model perplexity: " << calc_corpus_perplexity() << endl; // using beta_counts_ and theta_counts_
+		cout << "Log partition probability: " << calc_ln_corpus_partition_probality() << endl;
+	}
+
 }
 
 // random walk with uniform candidate
@@ -369,12 +408,11 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 		for (size_t n = 0; n < num_words; n++)
 			current_Z(n) 				= this->initial_z_(word_indices[n]);
 
-		ppZ 							= calc_partition_probality(word_indices, current_Z);
+		ppZ 							= calc_ln_partition_probality(word_indices, current_Z);
 
 		for (size_t iter = 0; iter < this->max_iterations_; iter++){ // START TOPIC SEARCH
 
 			if (this->sample_uniform() <= random_walk_prob){ // do random walk from the previous state
-//			if (drand48() <= random_walk_prob){ // do random walk from the previous state
 
 				num_random_walks++;
 				proposed_Z 				= current_Z;
@@ -401,13 +439,12 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 
 			}
 
-			ppZ_prime 					= calc_partition_probality(word_indices, proposed_Z);
+			ppZ_prime 					= calc_ln_partition_probality(word_indices, proposed_Z);
 			p_ratio 					= ppZ_prime - ppZ;
 			assert(iter_temperature(iter) > 0);
 			acceptance_probability 		= min(1.0L, pow(exp(p_ratio), (1 / iter_temperature(iter)))); // MH acceptance probability
 
 			if (this->sample_uniform() <= acceptance_probability){
-//			if (drand48() <= acceptance_probability){
 				current_Z 				= proposed_Z;
 				ppZ 					= ppZ_prime;
 				acceptance_count++;
@@ -452,7 +489,7 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 		sampled_z.reset();
 		sampled_z2.reset();
 
-		if (this->verbose_ >= 1)
+//		if (this->verbose_ >= 1)
 			cout << "doc " << d + 1 << " accepted # " << acceptance_count << " random walks # " << num_random_walks << endl;
 
 	} // END For each document
@@ -461,12 +498,161 @@ void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform(
 
 
 
-	if (this->verbose_ >= 1){
+//	if (this->verbose_ >= 1){
 		cout << endl << "Total execution time: " << timer.get_time() << "s" << endl;
 		cout << "Model perplexity: " << calc_corpus_perplexity() << endl; // using beta_counts_ and theta_counts_
 		cout << "Log partition probability: " << calc_ln_corpus_partition_probality() << endl;
-	}
+//	}
 }
+
+
+void TopicSearch::run_hybrid_random_walk_simulated_annealing_uniform2(
+		vec iter_temperature,
+		double random_walk_prob,
+		double percent_random_walk){
+
+	size_t accepted_Z_instances;
+	bool valid_burn_in_period;
+
+    Timer timer = Timer();
+	timer.restart_time();
+
+	init_z();
+
+	if (this->burn_in_period_ > 0 && this->burn_in_period_ < this->max_iterations_){
+		valid_burn_in_period = true;
+		accepted_Z_instances = ceil((this->max_iterations_ - this->burn_in_period_) / this->spacing);
+	}
+	else {
+		valid_burn_in_period = false;
+		accepted_Z_instances = ceil(this->max_iterations_ / this->spacing);
+	}
+
+
+
+	for (size_t d = 0; d < this->num_documents_; d++){ // START For each document
+
+		size_t num_words 				= this->document_lengths_[d];
+		umat accepted_Z 				= zeros<umat>(num_words, accepted_Z_instances);
+		vec accepted_Z_pp 				= zeros<vec>(accepted_Z_instances);
+		uvec proposed_Z 				= zeros<uvec>(num_words);
+		uvec current_Z 					= zeros<uvec>(num_words);
+		size_t acceptance_count 		= 0;
+		size_t count 					= 0;
+		size_t num_random_walks			= 0;
+		size_t num_random_walks2		= 0;
+		uvec sampled_z;
+		uvec sampled_z2;
+		vector <size_t> word_indices 	= this->document_word_indices_[d];
+		long double ppZ;
+		long double ppZ_prime;
+		long double tpZ_prime;
+		long double tpZ;
+		long double p_ratio;
+		long double q_ratio;
+		double acceptance_probability;
+		double multi_jump_prob 			= percent_random_walk / 100.0;
+
+		for (size_t n = 0; n < num_words; n++)
+			current_Z(n) 				= this->initial_z_(word_indices[n]);
+
+		ppZ 							= calc_ln_partition_probality(word_indices, current_Z);
+
+		for (size_t iter = 0; iter < this->max_iterations_; iter++){ // START TOPIC SEARCH
+
+			if (this->sample_uniform() <= random_walk_prob){ // do random walk from the previous state
+
+				num_random_walks++;
+				proposed_Z 				= current_Z;
+
+				for (size_t i = 0; i < num_words; i++){
+					if (this->sample_uniform() <= multi_jump_prob){ /// for each word with some probability multinomial jump
+						proposed_Z(i) 	= sample_multinomial(this->init_beta_sample_.col(this->word_ids_(word_indices[i])));
+						num_random_walks2++;
+					}
+				}
+
+			}
+			else { // do sample from a uniform
+
+				for (size_t i = 0; i < num_words; i++)
+					proposed_Z(i) 		= sample_uniform_int(this->num_topics_);
+
+			}
+
+			ppZ_prime 					= calc_ln_partition_probality(word_indices, proposed_Z);
+			p_ratio 					= ppZ_prime - ppZ;
+
+			tpZ_prime = calc_lnTP_hybrid_multi_randomwalk(num_words, word_indices, current_Z, random_walk_prob, multi_jump_prob);
+			tpZ = calc_lnTP_hybrid_multi_randomwalk(num_words, word_indices, proposed_Z, random_walk_prob, multi_jump_prob);
+			q_ratio = tpZ_prime - tpZ;
+
+			assert(iter_temperature(iter) > 0);
+//			acceptance_probability 		= min(1.0L, pow(exp(p_ratio), (1 / iter_temperature(iter)))); // MH acceptance probability
+			acceptance_probability = min(1.0L, pow(exp(p_ratio + q_ratio), (1.0 / iter_temperature(iter)))); // MH acceptance probability
+
+
+			if (this->sample_uniform() <= acceptance_probability){
+				current_Z 				= proposed_Z;
+				ppZ 					= ppZ_prime;
+				acceptance_count++;
+//				if (this->verbose_ >= 1){
+//					cout << "doc " << d + 1 << " iter " << iter + 1;
+//					cout << " accepted";
+//					cout << " [a.p. = " << pow(exp(p_ratio), (1 / iter_temperature(iter)))
+//							<< " ln P(z') = " << ppZ_prime << " ln P(z) = " << ppZ
+//							<< " a.count = " << acceptance_count << " ]" << endl;
+//				}
+			}
+
+			if (((iter + 1) % this->spacing == 0) && (!valid_burn_in_period || (valid_burn_in_period && (this->burn_in_period_ < iter)))) {
+				accepted_Z.col(count) 	= current_Z;
+				accepted_Z_pp(count) 	= ppZ_prime;
+				count++;
+			}
+
+		} // END TOPIC SEARCH
+
+
+		// Saves the results to the class variable
+		sampled_z 						= find_mode(accepted_Z);
+		sampled_z2 						= accepted_Z.col(count - 1);
+
+		for (size_t n = 0; n < num_words; n++){
+			this->sampled_z_(word_indices[n]) = sampled_z(n);
+			this->beta_counts_(this->sampled_z_(word_indices[n]), this->word_ids_(word_indices[n])) += 1;
+			this->beta_counts_last_(sampled_z2(n), this->word_ids_(word_indices[n])) += 1;
+		}
+
+
+		// Calculates theta counts
+		this->theta_counts_.col(d) 		= calc_topic_counts(sampled_z, this->num_topics_);
+		this->theta_counts_last_.col(d) = calc_topic_counts(sampled_z2, this->num_topics_);
+
+
+		// Resets all used data structures
+		current_Z.reset();
+		proposed_Z.reset();
+		accepted_Z.reset();
+		sampled_z.reset();
+		sampled_z2.reset();
+
+//		if (this->verbose_ >= 1)
+			cout << "doc " << d + 1 << " accepted # " << acceptance_count << " random walks # " << num_random_walks << " actual random walks # " << num_random_walks2 << endl;
+
+	} // END For each document
+
+
+
+
+
+//	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << timer.get_time() << "s" << endl;
+		cout << "Model perplexity: " << calc_corpus_perplexity() << endl; // using beta_counts_ and theta_counts_
+		cout << "Log partition probability: " << calc_ln_corpus_partition_probality() << endl;
+//	}
+}
+
 
 
 /**
@@ -512,22 +698,37 @@ double TopicSearch::calc_corpus_perplexity() {
  *
  */
 double TopicSearch::calc_ln_corpus_partition_probality() {
-
 	double partition_probability = 0.0;
-
-	// Calculate partition counts from  m_ji' s; i' = 1 ... V
-	vec partition_counts = sum(this->beta_counts_, 1); // sums over rows
-
-	// ln_gamma (n_j + alpha_j)
-	vec ln_gamma_Nj = log_gamma_vec(partition_counts + this->alpha_vec_);
-
+	vec ln_gamma_Nj = zeros<vec> (this->num_topics_);
 	vec ln_gamma_Mj = zeros<vec> (this->num_topics_);
-	for (size_t t = 0; t < this->num_topics_; t++)
-		ln_gamma_Mj(t) = sum(log_gamma_rowvec(this->beta_counts_.row(t)	+ 1e-24));
 
-	partition_probability = accu(ln_gamma_Nj + ln_gamma_Mj); // sum over all j s
+	// \sum_{d = 0}^{D} ln_gamma (n_j,d + alpha_j)
+	for (size_t d = 0; d < this->num_documents_; d++)
+		ln_gamma_Nj += log_gamma_vec(this->theta_counts_.col(d) + this->alpha_vec_);
+
+	// \sum_{t = 0}^{V} ln_gamma (\sum_{d=0}^{D}m_{jt,d} + alpha_j)
+	for (size_t t = 0; t < this->vocabulary_size_; t++)
+		ln_gamma_Mj += log_gamma_vec(this->beta_counts_.col(t) + 1e-24);
+
+	partition_probability = accu(ln_gamma_Nj + ln_gamma_Mj); // sum over all topics
 
 	return partition_probability;
+
+//	double partition_probability = 0.0;
+//
+//	// Calculate partition counts from  m_ji' s; i' = 1 ... V
+//	vec partition_counts = sum(this->beta_counts_, 1); // sums over rows
+//
+//	// ln_gamma (n_j + alpha_j)
+//	vec ln_gamma_Nj = log_gamma_vec(partition_counts + this->alpha_vec_);
+//
+//	vec ln_gamma_Mj = zeros<vec> (this->num_topics_);
+//	for (size_t t = 0; t < this->num_topics_; t++)
+//		ln_gamma_Mj(t) = sum(log_gamma_rowvec(this->beta_counts_.row(t)	+ 1e-24));
+//
+//	partition_probability = accu(ln_gamma_Nj + ln_gamma_Mj); // sum over all j s
+//
+//	return partition_probability;
 }
 
 
@@ -541,7 +742,7 @@ double TopicSearch::calc_ln_corpus_partition_probality() {
  * Ref: LDA production partition model by George Casella
  *
  */
-double TopicSearch::calc_partition_probality(
+double TopicSearch::calc_ln_partition_probality(
 		vector<size_t> word_indices,
 		uvec Z) {
 
@@ -566,7 +767,7 @@ double TopicSearch::calc_partition_probality(
 }
 
 
-long double TopicSearch::calc_hybrid_random_walk_transition_probability(
+long double TopicSearch::calc_lnTP_hybrid_randomwalk(
 		size_t num_words,
 		uvec Z,
 		uvec Z_prime,
@@ -587,4 +788,30 @@ long double TopicSearch::calc_hybrid_random_walk_transition_probability(
 
 	return log(transition_probability);
 }
+
+
+
+long double TopicSearch::calc_lnTP_hybrid_multi_randomwalk(
+		size_t num_words,
+		vector <size_t> word_indices,
+		uvec Z_prime,
+		double random_walk_prob,
+		double multi_jump_prob) {
+
+	long double prob = 0.0;
+	long double multi_jump = 1.0;
+	vec beta_w;
+
+	for (size_t i = 0; i < num_words; i++){
+		beta_w = this->beta_counts_.col(this->word_ids_(word_indices[i]));
+		multi_jump *= beta_w(Z_prime(i)) / (accu(beta_w) + 1);
+	}
+
+	prob = random_walk_prob * multi_jump_prob * multi_jump
+			+ random_walk_prob * (1.0 - multi_jump_prob) * (long double)num_words
+			+ (1.0 - random_walk_prob) * num_words / (long double) this->num_topics_;
+
+	return log(prob + 1e-24);
+}
+
 

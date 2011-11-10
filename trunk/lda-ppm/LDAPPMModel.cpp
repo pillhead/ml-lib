@@ -311,6 +311,8 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 	vector < size_t > unique_words;
 	mat beta_sample;
 	vec theta_d;
+	vec beta_remain;
+	rowvec beta_row;
 	size_t bp_count = 0;
 	size_t document_length = 0;
 	size_t num_unique_words = 0;
@@ -319,7 +321,7 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 	double pp = 0.0, ln_pp = 0.0;
 	register unsigned int i = 0, iter = 0, k = 0, d = 0;
 	ofstream myfile;
-	string str = output_prefix + "_model_info";
+	string str = output_prefix + "_full";
 	myfile.open(str.c_str());
 
 	myfile << "iter,time,dirichlet_time,perplexity,partition_prob" << endl;
@@ -344,7 +346,19 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			document_length = this->document_lengths_[d];
 			unique_words = this->document_unique_words_[d];
 			num_unique_words = unique_words.size();
-			beta_sample = zeros<mat>(this->num_topics_, num_unique_words);
+
+			//			beta_sample = zeros<mat>(this->num_topics_, num_unique_words);
+			//			t1.restart_time();
+			//
+			//			// Gibbs sampling for beta (with selected samples)
+			//
+			//			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
+			//			for (i = 0; i < num_unique_words; i++)
+			//				beta_sample.col(i) = this->beta_sample_.col(unique_words[i]);
+			//			for(k = 0; k < this->num_topics_; k++)
+			//				beta_sample.row(k) = sample_dirichlet_row_vec(num_unique_words, beta_sample.row(k));
+
+			beta_sample = zeros<mat>(this->num_topics_, num_unique_words + 1);
 			t1.restart_time();
 
 			// Gibbs sampling for beta (with selected samples)
@@ -352,8 +366,12 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
 			for (i = 0; i < num_unique_words; i++)
 				beta_sample.col(i) = this->beta_sample_.col(unique_words[i]);
-			for(k = 0; k < this->num_topics_; k++)
-				beta_sample.row(k) = sample_dirichlet_row_vec(num_unique_words, beta_sample.row(k));
+			beta_remain = sum(this->beta_sample_, 1) - sum(beta_sample, 1);
+			for(k = 0; k < this->num_topics_; k++){
+				beta_row = beta_sample.row(k);
+				beta_row(num_unique_words) = beta_remain(k);
+				beta_sample.row(k) = sample_dirichlet_row_vec(num_unique_words + 1, beta_row); // This incorporates to reduce errors
+			}
 			for (i = 0; i < num_unique_words; i++)
 				this->beta_sample_.col(unique_words[i]) = beta_sample.col(i);
 
@@ -454,7 +472,7 @@ void LDAPPMModel::run_incremental_gibbs (string output_prefix)
 	double pp = 0.0;
 	double period = 0.0;
 	ofstream myfile;
-	string str = output_prefix + "_model_info";
+	string str = output_prefix + "_full";
 	myfile.open(str.c_str());
 
 	myfile << "Gibbs sampling" << endl;

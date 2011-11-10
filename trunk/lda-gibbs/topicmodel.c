@@ -251,7 +251,7 @@ int main(int argc, char* argv[])
 	write_sparse_d(W, T, Nwt, name);
 	sprintf(name, "%s_Ndt", output_prefix);
 	write_sparse_d(D, T, Ndt, name);
-	sprintf(name, "%s_z", output_prefix);
+	sprintf(name, "%s_collapsed_z", output_prefix);
 	write_ivec(N, z, name);
 
 	double pp = pplex_d(N, W, T, w, d, Nwt, Ndt);

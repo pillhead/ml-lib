@@ -38,7 +38,8 @@ void print_usage_and_exit()
     cout << "\n  general parameters:\n";
     cout << "      --algorithm (mandatory):\n";
     cout << "                 lda              - LDA Gibbs sampling with fixed number of topics \n"
-			"                 lda_oi           - online (incremental) LDA Gibbs sampling  \n"
+			"                 lda_bias         - LDA Full Gibbs sampling (biased beta sampling)  \n"
+    		"                 lda_oi           - online (incremental) LDA Gibbs sampling  \n"
 			"                 lda_ob           - online (batch) LDA Gibbs sampling  \n"
     		"                 ts_hrw           - topic search based on hybrid Metropolis search \n";
     cout << "      --data (mandatory):         data file (for format see README)\n";
@@ -190,6 +191,26 @@ int main(int argc, char** argv)
 		if (verbose >= 1)
 			cout << "\nThe full Gibbs sampler - iterations\n================================\n";
 		mdl.run_gibbs(output_prefix);
+		mdl.save_state(output_prefix);
+
+	}
+	if (!algorithm.compare("lda_bias")){
+
+		LDAPPMModel mdl = LDAPPMModel(
+				topic_count,
+				max_iter,
+				burn_in_period,
+				alpha,
+				eta,
+				data_file,
+				data_format,
+				vocab_file);
+
+		mdl.set_verbose(verbose);
+		mdl.print_metadata();
+		if (verbose >= 1)
+			cout << "\nThe full Gibbs sampler (biased) - iterations\n================================\n";
+		mdl.run_biased_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 
 	}
