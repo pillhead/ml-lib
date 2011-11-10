@@ -25,10 +25,21 @@ private:
 	void read_beta_counts(string beta_file);
 	void init_z();
 	void init_z_with_beta();
-	double calc_partition_probality(vector <size_t> doc_idx, uvec Z);
+	double calc_ln_partition_probality(vector <size_t> doc_idx, uvec Z);
 	long double calc_transition_probability(size_t num_words, uvec Z, uvec Z_prime, mat pdf);
-	long double calc_hybrid_random_walk_transition_probability(size_t num_words, uvec Z, uvec Z_prime, mat pdf, double random_walk_prob, size_t random_walk_words);
-
+	long double calc_lnTP_hybrid_randomwalk(
+			size_t num_words,
+			uvec Z,
+			uvec Z_prime,
+			mat pdf,
+			double random_walk_prob,
+			size_t random_walk_words);
+	long double calc_lnTP_hybrid_multi_randomwalk(
+			size_t num_words,
+			vector <size_t> word_indices,
+			uvec Z_prime,
+			double random_walk_prob,
+			double multi_jump_prob);
 
 public:
 
@@ -62,6 +73,10 @@ public:
 	void run_hybrid_random_walk(double random_walk_prob, double percent_random_walk);
 	void run_hybrid_random_walk_simulated_annealing(vec iter_temperature, double random_walk_prob, double percent_random_walk);
 	void run_hybrid_random_walk_simulated_annealing_uniform(vec iter_temperature, double random_walk_prob, double percent_random_walk);
+	void run_hybrid_random_walk_simulated_annealing_uniform2(
+			vec iter_temperature,
+			double random_walk_prob,
+			double percent_random_walk);
 	void run_hybrid_random_walk_simulated_annealing(double init_temperature, double final_temperature, double random_walk_prob, double percent_random_walk);
 	void save_state(string state_name);
 	void save_theta(string state_name);
