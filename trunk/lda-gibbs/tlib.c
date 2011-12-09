@@ -87,6 +87,22 @@ double **dmat(int nr, int nc) //
 	return x;
 }
 
+void append_dmat(double **x, double **y, int nr, int nc) // appends mat y to x
+{
+	register unsigned int i, j;
+	for (i = 0; i < nr; i++)
+		for (j = 0; j < nc; j++)
+			x[i][j] += y[i][j];
+}
+
+void div_scalar_dmat(double **x, double div, int nr, int nc) // divides mat x by double div
+{
+	register unsigned int i, j;
+	for (i = 0; i < nr; i++)
+		for (j = 0; j < nc; j++)
+			x[i][j] /= div;
+}
+
 void free_dmat(double **x) //
 {
 	free(x[0]);
@@ -671,12 +687,22 @@ void read_sparsebin(char *fname, int *col1, int *col2, int *col3) //
 	fclose(fp);
 }
 
-void write_ivec (int n, int *x, char *fname) //
+void write_ivec (int n, int *x, char *fname, char *type) //
 {
-	FILE *fp = fopen(fname,"w");
+	FILE *fp = fopen(fname, type);
 	int i;
 	assert(fp);
 	for (i = 0; i < n; i++)  fprintf(fp, "%d\n", x[i]+1 );
+	fclose(fp);
+}
+
+void write_ivec2 (int n, int *x, char *fname, char *type) //
+{
+	FILE *fp = fopen(fname, type);
+	int i;
+	assert(fp);
+	for (i = 0; i < n; i++)  fprintf(fp, "%d,", x[i]+1 );
+	fprintf(fp, "\n");
 	fclose(fp);
 }
 
@@ -1000,6 +1026,56 @@ void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, doubl
 	free(prob);
 }
 
+void sample_chain_with_fixed_beta (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt) //
+{
+	int ii, i, t;
+	double totprob, U, cumprob;
+	double *prob = dvec(T);
+	int wid, did;
+	double *word_vec;
+	double *doc_vec;
+	double *prior_word_vec;
+
+	for (ii = 0; ii < N; ii++) {
+
+		i = order[ ii ];
+
+		wid = w[i];
+		did = d[i];
+
+		word_vec = Nwt[wid];
+		doc_vec  = Ndt[did];
+		prior_word_vec = prior_Nwt[wid];
+
+		t = z[i];
+		Nt[t]--;
+		word_vec[t]--;
+		doc_vec[t]--;
+		totprob = 0;
+
+		for (t = 0; t < T; t++) {
+			prob[t] = doc_vec[t] * prior_word_vec[t] / Nt[t];
+			totprob += prob[t];
+		}
+
+		// U = drand48()*totprob;
+		U = sample_uniform() * totprob;
+		cumprob = prob[0];
+		t = 0;
+		while (U>cumprob) {
+			t++;
+			cumprob += prob[t];
+		}
+
+		z[i] = t;
+		word_vec[t]++;
+		doc_vec[t]++;
+		Nt[t]++;
+	}
+
+	free(prob);
+}
+
 void sample_doc_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double *Ndt, double *Nt, int *order, double **prior_Nwt) //
 {
 	int ii, i, t;
@@ -1045,6 +1121,8 @@ void sample_doc_with_prior (int N, int W, int T, int *w, int *d, int *z, double 
 
 	free(prob);
 }
+
+
 
 void sample_chain_d_icm (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order) //
 {
