@@ -145,17 +145,17 @@ void LDAPPMModel::init_beta(string beta_counts_file){
 void LDAPPMModel::save_state(string state_name){
 
 	if (this->burn_in_period_ > 0){ // handles burn in period
-		this->beta_samples_mean_.save(state_name + "_beta_samples_mean", raw_ascii);
-		this->theta_samples_mean_.save(state_name + "_theta_samples_mean", raw_ascii);
+//		this->beta_samples_mean_.save(state_name + "_beta_samples_mean", raw_ascii);
+//		this->theta_samples_mean_.save(state_name + "_theta_samples_mean", raw_ascii);
 		this->beta_counts_mean_.save(state_name + "_beta_counts_mean", raw_ascii);
 		this->theta_counts_mean_.save(state_name + "_theta_counts_mean", raw_ascii);
 	}
 	else {
 		mat post_beta_counts = this->prior_beta_counts_ + this->beta_counts_;
 		post_beta_counts.save(state_name + "_beta_counts", raw_ascii);
-		this->beta_sample_.save(state_name + "_beta_samples", raw_ascii);
+//		this->beta_sample_.save(state_name + "_beta_samples", raw_ascii);
 		this->theta_counts_.save(state_name + "_theta_counts", raw_ascii);
-		this->theta_sample_.save(state_name + "_theta_samples", raw_ascii);
+//		this->theta_sample_.save(state_name + "_theta_samples", raw_ascii);
 	}
 	this->beta_counts_.save(state_name + "_beta_counts_last", raw_ascii);
 	this->theta_counts_.save(state_name + "_theta_counts_last", raw_ascii);
@@ -254,10 +254,9 @@ void LDAPPMModel::run_gibbs (string output_prefix)
 
 		if (this->burn_in_period_ > 0 && iter > this->burn_in_period_){
 			this->z_bp_.col(bp_count) = this->z_;
-			this->beta_samples_mean_ += this->beta_sample_;
-			this->theta_samples_mean_ += this->theta_sample_;
-			this->beta_counts_mean_ += this->prior_beta_counts_ + this->beta_counts_; // TODO need to make sure whether it's right
-			this->beta_counts_mean_ += this->beta_counts_;
+//			this->beta_samples_mean_ += this->beta_sample_;
+//			this->theta_samples_mean_ += this->theta_sample_;
+			this->beta_counts_mean_ += (this->prior_beta_counts_ + this->beta_counts_); // TODO need to make sure whether it's right
 			this->theta_counts_mean_ += this->theta_counts_;
 
 			bp_count++;
@@ -282,24 +281,19 @@ void LDAPPMModel::run_gibbs (string output_prefix)
 
 	// Averages for burn in period
 	if (this->burn_in_period_ > 0) {
-		this->beta_samples_mean_ /= bp_count;
-		this->theta_samples_mean_ /= bp_count;
-		this->beta_counts_mean_ /= bp_count;
-		this->theta_counts_mean_ /= bp_count;
+//		this->beta_samples_mean_ /= (bp_count + 1);
+//		this->theta_samples_mean_ /= (bp_count + 1);
+		this->beta_counts_mean_ /= (bp_count + 1);
+		this->theta_counts_mean_ /= (bp_count + 1);
 		this->z_mode_ = find_mode(this->z_bp_);
 	}
 
 
-	if (this->burn_in_period_ > 0){
-		pp = calc_corpus_perplexity();
-//		myfile << endl << "Total execution time: " << total_time_taken << "s" << endl;
-//		myfile << "Model perplexity: " << pp << endl;
-	}
-
 	if (this->verbose_ >= 1){
 		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
 //		cout << "Log partition probability:" << calc_ln_corpus_partition_probality() << "\n";
-		if (this->burn_in_period_ > 0) cout << "Model perplexity: " << pp << endl; // using beta_counts_mean_ and theta_counts_mean_
+		if (this->burn_in_period_ > 0)
+			cout << "Model perplexity: " << calc_corpus_perplexity() << endl;
 	}
 
 	myfile.close();
@@ -347,17 +341,6 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			unique_words = this->document_unique_words_[d];
 			num_unique_words = unique_words.size();
 
-			//			beta_sample = zeros<mat>(this->num_topics_, num_unique_words);
-			//			t1.restart_time();
-			//
-			//			// Gibbs sampling for beta (with selected samples)
-			//
-			//			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
-			//			for (i = 0; i < num_unique_words; i++)
-			//				beta_sample.col(i) = this->beta_sample_.col(unique_words[i]);
-			//			for(k = 0; k < this->num_topics_; k++)
-			//				beta_sample.row(k) = sample_dirichlet_row_vec(num_unique_words, beta_sample.row(k));
-
 			beta_sample = zeros<mat>(this->num_topics_, num_unique_words + 1);
 			t1.restart_time();
 
@@ -366,6 +349,7 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
 			for (i = 0; i < num_unique_words; i++)
 				beta_sample.col(i) = this->beta_sample_.col(unique_words[i]);
+
 			beta_remain = sum(this->beta_sample_, 1) - sum(beta_sample, 1);
 			for(k = 0; k < this->num_topics_; k++){
 				beta_row = beta_sample.row(k);
@@ -383,7 +367,127 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 
 			dirichlet_time += t1.get_time();
 
+			// Gibbs sampling for each document-word-instance
 
+			for(i = 0; i < document_length; i++)
+				this->beta_counts_(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) -= 1; // Excludes the document d's word-topic counts
+
+
+			//  Samples topics Z (word topic selection)
+			for(i = 0; i < document_length; i++)
+				this->z_(word_indices[i]) = sample_multinomial(this->theta_sample_.col(d) % this->beta_sample_.col(this->word_ids_(word_indices[i])));
+
+			for(i = 0; i < document_length; i++)
+				this->beta_counts_(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) += 1; // updates beta counts
+
+
+
+		}
+
+
+		// Handles burn in period
+
+		if (this->burn_in_period_ > 0 && iter > this->burn_in_period_){
+			this->z_bp_.col(bp_count) = this->z_;
+			this->beta_counts_mean_ += (this->prior_beta_counts_ + this->beta_counts_); // TODO need to make sure whether it's right
+			this->theta_counts_mean_ += this->theta_counts_;
+
+			bp_count++;
+		}
+
+		period = t.get_time();
+		total_time_taken += period;
+		pp = calc_corpus_perplexity2();
+		ln_pp = calc_ln_corpus_partition_probality2();
+
+		if (this->verbose_ >= 1) {
+			cout << " time: " << period;
+			cout << " dirichlet: " << dirichlet_time;
+			cout << " perplexity: " << pp;
+			cout << " log partition prob:" << ln_pp << "\n";
+		}
+
+		myfile << period << "," << dirichlet_time << "," << pp << ","  << ln_pp << "\n";
+	}
+
+	// END GIBBS ITERATIONS
+
+	// Averages for burn in period
+	if (this->burn_in_period_ > 0) {
+		this->beta_counts_mean_ /= (bp_count + 1);
+		this->theta_counts_mean_ /= (bp_count + 1);
+		this->z_mode_ = find_mode(this->z_bp_);
+	}
+
+
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
+		if (this->burn_in_period_ > 0)
+			cout << "Model perplexity: " << calc_corpus_perplexity() << endl;
+	}
+
+	myfile.close();
+}
+
+
+void LDAPPMModel::run_collapsed_beta_gibbs (string output_prefix)
+{
+	vector < size_t > word_indices;
+	vector < size_t > unique_words;
+	mat beta_sample;
+	vec theta_d;
+	vec beta_remain;
+	rowvec beta_row;
+	size_t bp_count = 0;
+	size_t document_length = 0;
+	size_t num_unique_words = 0;
+	Timer t = Timer();
+	double total_time_taken = 0.0, period = 0.0;
+	double pp = 0.0, ln_pp = 0.0, pp2 = 0.0;
+	register unsigned int i = 0, iter = 0, d = 0;
+	ofstream myfile;
+	string str = output_prefix + "_full";
+	myfile.open(str.c_str());
+
+	myfile << "iter,time,dirichlet_time,perplexity,pp_perplexity,partition_prob" << endl;
+
+
+	Timer t1 = Timer();
+	double dirichlet_time;
+
+	// START GIBBS ITERATIONS
+
+	for (iter = 0; iter < this->max_iterations_; iter++){
+
+		t.restart_time();
+		dirichlet_time = 0.0;
+
+		if (this->verbose_ >= 1) cout << "iter #" << iter + 1;
+		myfile << iter + 1 << ",";
+
+		for (d = 0; d < this->num_documents_; d++){ // for each document
+
+			word_indices = this->document_word_indices_[d];
+			document_length = this->document_lengths_[d];
+			unique_words = this->document_unique_words_[d];
+			num_unique_words = unique_words.size();
+
+			beta_sample = zeros<mat>(this->num_topics_, num_unique_words + 1);
+			t1.restart_time();
+
+			// No Gibbs sampling for beta
+
+			this->beta_sample_ = this->prior_beta_counts_ + this->beta_counts_ + this->eta_;
+			for(register unsigned int k = 0; k < this->num_topics_; k++)
+				this->beta_sample_.row(k) /= sum(this->beta_sample_.row(k));
+
+
+			// Gibbs sampling for theta
+
+			this->theta_counts_.col(d) = calc_partition_counts(word_indices); // updates theta counts
+			this->theta_sample_.col(d) = sample_dirichlet_col_vec(this->num_topics_, this->theta_counts_.col(d) + this->alpha_);
+
+			dirichlet_time += t1.get_time();
 
 			// Gibbs sampling for each document-word-instance
 
@@ -398,6 +502,8 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			for(i = 0; i < document_length; i++)
 				this->beta_counts_(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) += 1; // updates beta counts
 
+
+
 		}
 
 
@@ -405,9 +511,125 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 
 		if (this->burn_in_period_ > 0 && iter > this->burn_in_period_){
 			this->z_bp_.col(bp_count) = this->z_;
-			this->beta_samples_mean_ += this->beta_sample_;
-			this->theta_samples_mean_ += this->theta_sample_;
-			this->beta_counts_mean_ += this->prior_beta_counts_ + this->beta_counts_; // TODO need to make sure whether it's right
+			this->beta_counts_mean_ += (this->prior_beta_counts_ + this->beta_counts_); // TODO need to make sure whether it's right
+			this->theta_counts_mean_ += this->theta_counts_;
+
+			bp_count++;
+		}
+
+		period = t.get_time();
+		total_time_taken += period;
+		pp = calc_corpus_perplexity2();
+		pp2 = calc_corpus_perplexity3();
+		ln_pp = calc_ln_corpus_partition_probality2();
+
+		if (this->verbose_ >= 1) {
+			cout << " time: " << period;
+			cout << " dirichlet: " << dirichlet_time;
+			cout << " perplexity: " << pp;
+			cout << " new perplexity: " << pp2;
+			cout << " log partition prob:" << ln_pp << "\n";
+		}
+
+		myfile << period << "," << dirichlet_time << "," << pp << ","  << pp2 << "," << ln_pp << "\n";
+	}
+
+	// END GIBBS ITERATIONS
+
+	// Averages for burn in period
+	if (this->burn_in_period_ > 0) {
+		this->beta_counts_mean_ /= (bp_count + 1);
+		this->theta_counts_mean_ /= (bp_count + 1);
+		this->z_mode_ = find_mode(this->z_bp_);
+	}
+
+
+	if (this->verbose_ >= 1){
+		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
+		if (this->burn_in_period_ > 0)
+			cout << "Model perplexity: " << calc_corpus_perplexity() << endl;
+	}
+
+	myfile.close();
+}
+
+
+void LDAPPMModel::run_fixed_beta_gibbs (string output_prefix)
+{
+	vector < size_t > word_indices;
+	mat beta_sample;
+	mat prior_beta;
+	vec theta_d;
+	vec beta_remain;
+	rowvec beta_row;
+	size_t bp_count = 0;
+	size_t document_length = 0;
+	Timer t = Timer();
+	double total_time_taken = 0.0, period = 0.0;
+	double pp = 0.0, ln_pp = 0.0;
+	register unsigned int i = 0, iter = 0, d = 0;
+	ofstream myfile;
+	string str = output_prefix + "_full";
+	myfile.open(str.c_str());
+
+	myfile << "iter,time,dirichlet_time,perplexity,partition_prob" << endl;
+
+
+	Timer t1 = Timer();
+	double dirichlet_time;
+
+	// No Gibbs sampling for beta
+
+	prior_beta = this->prior_beta_counts_ + this->eta_;
+	for(register unsigned int k = 0; k < this->num_topics_; k++)
+		prior_beta.row(k) /= sum(prior_beta.row(k));
+
+
+
+	// START GIBBS ITERATIONS
+
+	for (iter = 0; iter < this->max_iterations_; iter++){
+
+		t.restart_time();
+		dirichlet_time = 0.0;
+
+		if (this->verbose_ >= 1) cout << "iter #" << iter + 1;
+		myfile << iter + 1 << ",";
+
+		for (d = 0; d < this->num_documents_; d++){ // for each document
+
+			word_indices = this->document_word_indices_[d];
+			document_length = this->document_lengths_[d];
+
+			t1.restart_time();
+
+			// Gibbs sampling for theta
+
+			this->theta_counts_.col(d) = calc_partition_counts(word_indices); // updates theta counts
+			this->theta_sample_.col(d) = sample_dirichlet_col_vec(this->num_topics_, this->theta_counts_.col(d) + this->alpha_);
+
+			dirichlet_time += t1.get_time();
+
+			// Gibbs sampling for each document-word-instance
+
+			for(i = 0; i < document_length; i++)
+				this->beta_counts_(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) -= 1; // Excludes the document d's word-topic counts
+
+
+			//  Samples topics Z (word topic selection)
+			for(i = 0; i < document_length; i++)
+				this->z_(word_indices[i]) = sample_multinomial(this->theta_sample_.col(d) % prior_beta.col(this->word_ids_(word_indices[i])));
+
+			for(i = 0; i < document_length; i++)
+				this->beta_counts_(this->z_(word_indices[i]), this->word_ids_(word_indices[i])) += 1; // updates beta counts
+
+		}
+
+
+		// Handles burn in period
+
+		if (this->burn_in_period_ > 0 && iter > this->burn_in_period_){
+			this->z_bp_.col(bp_count) = this->z_;
 			this->beta_counts_mean_ += this->beta_counts_;
 			this->theta_counts_mean_ += this->theta_counts_;
 
@@ -426,30 +648,23 @@ void LDAPPMModel::run_biased_gibbs (string output_prefix)
 			cout << " log partition prob:" << ln_pp << "\n";
 		}
 
-		myfile << period << "," << dirichlet_time << "," << pp << "," << ln_pp << "\n";
+		myfile << period << "," << dirichlet_time << "," << pp << ","  << ln_pp << "\n";
 	}
 
 	// END GIBBS ITERATIONS
 
 	// Averages for burn in period
 	if (this->burn_in_period_ > 0) {
-		this->beta_samples_mean_ /= bp_count;
-		this->theta_samples_mean_ /= bp_count;
-		this->beta_counts_mean_ /= bp_count;
-		this->theta_counts_mean_ /= bp_count;
+		this->beta_counts_mean_ /= (bp_count + 1);
+		this->theta_counts_mean_ /= (bp_count + 1);
 		this->z_mode_ = find_mode(this->z_bp_);
 	}
 
 
-	if (this->burn_in_period_ > 0){
-		pp = calc_corpus_perplexity();
-//		myfile << endl << "Total execution time: " << total_time_taken << "s" << endl;
-//		myfile << "Model perplexity: " << pp << endl;
-	}
-
 	if (this->verbose_ >= 1){
 		cout << endl << "Total execution time: " << total_time_taken << "s" << endl;
-		if (this->burn_in_period_ > 0) cout << "Model perplexity: " << pp << endl; // using beta_counts_mean_ and theta_counts_mean_
+		if (this->burn_in_period_ > 0)
+			cout << "Model perplexity: " << calc_corpus_perplexity() << endl;
 	}
 
 	myfile.close();
@@ -723,7 +938,7 @@ double LDAPPMModel::calc_corpus_perplexity() {
 
 	// Calculates number of words assigned to each topic
 	for (size_t t = 0; t < this->num_topics_; t++)
-		partition_counts(t) = accu(this->beta_counts_mean_.row(t)) + this->eta_;
+		partition_counts(t) = accu(this->beta_counts_mean_.row(t) + this->eta_);
 
 	// partition_counts += 1e-24;
 
@@ -753,7 +968,7 @@ double LDAPPMModel::calc_corpus_perplexity2() {
 
 	// Calculates number of words assigned to each topic
 	for (size_t t = 0; t < this->num_topics_; t++)
-		partition_counts(t) = accu(this->beta_counts_.row(t)) + this->eta_;
+		partition_counts(t) = accu(this->beta_counts_.row(t) + this->eta_);
 
 	// partition_counts += 1e-24;
 
@@ -829,5 +1044,7 @@ double LDAPPMModel::calc_ln_corpus_partition_probality2() {
 }
 
 
-
+double LDAPPMModel::calc_corpus_perplexity3() {
+	return exp(-calc_ln_corpus_partition_probality2() / this->num_word_instances_);
+}
 

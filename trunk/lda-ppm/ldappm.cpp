@@ -39,6 +39,8 @@ void print_usage_and_exit()
     cout << "      --algorithm (mandatory):\n";
     cout << "                 lda              - LDA Gibbs sampling with fixed number of topics \n"
 			"                 lda_bias         - LDA Full Gibbs sampling (biased beta sampling)  \n"
+			"                 lda_coll_beta    - LDA Gibbs sampling (samples theta and z's)  \n"
+			"                 lda_fixed_beta   - LDA Gibbs sampling (fixed beta and samples theta and z)  \n"
     		"                 lda_oi           - online (incremental) LDA Gibbs sampling  \n"
 			"                 lda_ob           - online (batch) LDA Gibbs sampling  \n"
     		"                 ts_hrw           - topic search based on hybrid Metropolis search \n";
@@ -194,7 +196,7 @@ int main(int argc, char** argv)
 		mdl.save_state(output_prefix);
 
 	}
-	if (!algorithm.compare("lda_bias")){
+	else if (!algorithm.compare("lda_bias")){
 
 		LDAPPMModel mdl = LDAPPMModel(
 				topic_count,
@@ -213,6 +215,50 @@ int main(int argc, char** argv)
 		mdl.run_biased_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 
+	}
+	else if (!algorithm.compare("lda_coll_beta")){
+
+		LDAPPMModel mdl = LDAPPMModel(
+				topic_count,
+				max_iter,
+				burn_in_period,
+				alpha,
+				eta,
+				data_file,
+				data_format,
+				vocab_file);
+
+		mdl.set_verbose(verbose);
+		mdl.print_metadata();
+		if (verbose >= 1)
+			cout << "\nThe Gibbs sampler ( samples theta and z's) - iterations\n================================\n";
+		mdl.run_collapsed_beta_gibbs(output_prefix);
+		mdl.save_state(output_prefix);
+
+	}
+	else if (!algorithm.compare("lda_fixed_beta")){
+
+		if (!saved_beta_counts.compare("")) {
+	        cout << endl << "saved beta-counts file is mandatory!\n";
+	        exit(1);
+		}
+
+
+		LDAPPMModel mdl = LDAPPMModel(
+				topic_count,
+				max_iter,
+				burn_in_period,
+				alpha,
+				eta,
+				data_file,
+				data_format,
+				vocab_file,
+				saved_beta_counts);
+		mdl.set_verbose(verbose);
+		mdl.print_metadata();
+		mdl.print_message("\nThe Gibbs sampler with fixed Beta \n ================================\n");
+		mdl.run_fixed_beta_gibbs(output_prefix);
+		mdl.save_state(output_prefix);
 	}
 	else if (!algorithm.compare("lda_ob")){
 
@@ -236,6 +282,29 @@ int main(int argc, char** argv)
 		mdl.print_metadata();
 		mdl.print_message("\nThe full Gibbs sampler with a prior Beta (batch)\n ================================\n");
 		mdl.run_gibbs(output_prefix);
+		mdl.save_state(output_prefix);
+	}
+	else if (!algorithm.compare("lda_bias_ob")){
+
+		if (!saved_beta_counts.compare("")) {
+	        cout << endl << "saved beta-counts file is mandatory!\n";
+	        exit(1);
+		}
+
+		LDAPPMModel mdl = LDAPPMModel(
+				topic_count,
+				max_iter,
+				burn_in_period,
+				alpha,
+				eta,
+				data_file,
+				data_format,
+				vocab_file,
+				saved_beta_counts);
+		mdl.set_verbose(verbose);
+		mdl.print_metadata();
+		mdl.print_message("\nThe full Gibbs sampler with a prior Beta (batch)\n ================================\n");
+		mdl.run_biased_gibbs(output_prefix);
 		mdl.save_state(output_prefix);
 	}
 	else if (!algorithm.compare("lda_oi")){
