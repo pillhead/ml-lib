@@ -34,45 +34,41 @@ int main(int argc, char* argv[])
 	int prior_W;
 	int prior_T;
 
-	int i, iter, seed, j;
+	int i, iter, burn_in_period, j;
 	int *w, *d, *z, *order;
-	double **Nwt, **Ndt, *Nt, **prior_Nwt = NULL;
+	double **Nwt, **Ndt, *Nt, **prior_Nwt = NULL, **burn_in_Nwt, **burn_in_Ndt;
 	double alpha, beta;
 	char * file_name = NULL;
 	char * data_format = NULL;
 	char * prior_beta_file = NULL;
-	int prior_flg = 0;
 	double start_time = 0.0, total_time = 0.0, period = 0.0;
-	int incremental_gibbs = 0;
 	char* output_prefix = NULL;
 	char name[500];
 	FILE *fp = NULL;
+	double divider = 0.0;
+	int algorithm = 0;
 
 
 	if (argc < 7) {
-		fprintf(stderr, "usage: %s T iter seed data_format input_file output_prefix prior_beta(optional) incremental_gibbs (optional)\n", argv[0]);
+		fprintf(stderr, "usage: %s T iter burn_in_period data_format input_file output_prefix algorithm (optional) prior_beta(optional)\n", argv[0]);
 		exit(-1);
 	}
 
 	T    = atoi(argv[1]); assert(T>0);
 	iter = atoi(argv[2]); assert(iter>0);
-	seed = atoi(argv[3]); assert(seed>0);
+	burn_in_period = atoi(argv[3]); assert(burn_in_period > 0 && burn_in_period < iter);
 	data_format = argv[4];
 	file_name = argv[5];
 	output_prefix = argv[6];
 
 	// Reads prior beta provided
 	if (argc >= 8){
-		prior_flg = 1;
-		prior_beta_file = argv[7];
+		algorithm = atoi(argv[7]);
+		assert(algorithm  == 0 || algorithm == 1 || algorithm == 2 || algorithm == 3);
+		prior_beta_file = argv[8];
 		prior_Nwt = read_sparse(prior_beta_file, &prior_W, &prior_T);
+		printf("topics %d\n", prior_T);
 		assert(T == prior_T);
-
-		// Case: online and one document at a time
-		if (argc == 9){
-			incremental_gibbs = atoi(argv[8]);
-			assert(incremental_gibbs  == 0 || incremental_gibbs == 1);
-		}
 	}
 
     if (output_prefix == NULL)
@@ -101,29 +97,20 @@ int main(int argc, char* argv[])
 	// We assume that there won't be any new
 	// terms in the online document (that
 	// should be removed during pre-processing step)
-	if (prior_flg) W = prior_W;
+	if (algorithm > 0) W = prior_W;
 
 	printf("format     = %s\n", data_format);
 	printf("file name  = %s\n", file_name);
-	printf("seed       = %d\n", seed);
 	printf("N          = %d\n", N);
 	printf("W          = %d\n", W);
 	printf("D          = %d\n", D);
 	printf("T          = %d\n", T);
 	printf("iterations = %d\n", iter);
-
-//	fprintf(fp, "format     = %s\n", data_format);
-//	fprintf(fp, "file name  = %s\n", file_name);
-//	fprintf(fp, "seed       = %d\n", seed);
-//	fprintf(fp, "N          = %d\n", N);
-//	fprintf(fp, "W          = %d\n", W);
-//	fprintf(fp, "D          = %d\n", D);
-//	fprintf(fp, "T          = %d\n", T);
-//	fprintf(fp, "iterations = %d\n", iter);
+	printf("burn in    = %d\n", burn_in_period);
 
 	init_random_generator();
 
-	if (incremental_gibbs){ // -- online with one document at a time (handles only LDA-C format)
+	if (algorithm == 3){ // -- online with one document at a time (handles only LDA-C format) TODO: fix the burn in samples case
 
 		int ii = 0, di = 0, NN = 0, nn = 0;
 		int * zid, * wid, * did, * doc_counts;
@@ -197,9 +184,11 @@ int main(int argc, char* argv[])
 		Nwt = dmat(W,T);
 		Ndt = dmat(D,T);
 		Nt  = dvec(T);
+		burn_in_Nwt = dmat(W,T);
+		burn_in_Ndt = dmat(D,T);
 
-		alpha = 0.05 * N / (D * T);
-		beta  = 0.01;
+		alpha = 1.0; // 0.05 * N / (D * T);
+		beta  = 1.0; // 0.01;
 
 		printf("alpha      = %f\n", alpha);
 		printf("beta       = %f\n", beta);
@@ -212,15 +201,25 @@ int main(int argc, char* argv[])
 		add_smooth_d(D, T, Ndt, alpha);
 		add_smooth_d(W, T, Nwt, beta);
 		add_smooth1d(T, Nt, W * beta);
+		if (algorithm == 2)
+			add_smooth_d(W, T, prior_Nwt, beta);
+
 		fprintf(fp, "iter,time,perplexity\n");
+
+
 		for (i = 0; i < iter; i++) {
 
 			start_time = current_time();
 
-			if (!prior_flg)
-				sample_chain_d(N,W,T,w,d,z,Nwt,Ndt,Nt,order);
-			else
+			if (algorithm == 0) // regular Gibbs sampling
+				sample_chain_d(N, W, T, w, d, z, Nwt, Ndt, Nt, order);
+
+			else if (algorithm == 1) // batch Gibbs sampling with prior beta
 				sample_chain_with_prior(N, W, T, w, d, z, Nwt, Ndt, Nt, order, prior_Nwt);
+
+			else if (algorithm == 2) // fixed beta case
+				sample_chain_with_fixed_beta(N, W, T, w, d, z, Nwt, Ndt, Nt, order, prior_Nwt);
+
 
 			period = current_time() - start_time;
 			total_time += period;
@@ -229,33 +228,63 @@ int main(int argc, char* argv[])
 			printf("iter %d time: %.5fs\n", i+1, period);
 			fprintf(fp, "%d,%.5f,%.5f\n", i+1, period, pplex_d(N, W, T, w, d, Nwt, Ndt));
 
+
+			if (i >= burn_in_period){
+				append_dmat(burn_in_Nwt, Nwt, W, T);
+				append_dmat(burn_in_Ndt, Ndt, D, T);
+				divider += 1.0;
+			}
+
 		}
+
+
 
 	} // -- not online (incremental)
 
 
 	free_random_generator();
 
+	// Takes mean for the burn_in_samples
+	assert(divider > 0);
+	div_scalar_dmat(burn_in_Nwt, divider, W, T);
+	div_scalar_dmat(burn_in_Ndt, divider, D, T);
+
 	// Calculates the effective beta (for online learning) TODO not sure!!
-	if (prior_flg){
+	if (algorithm == 1 || algorithm == 3){
 		for (i = 0; i < W; i++)
-			for (j = 0; j < T; j++)
+			for (j = 0; j < T; j++){
 				Nwt[i][j] += prior_Nwt[i][j];
+				burn_in_Nwt[i][j] += prior_Nwt[i][j];
+			}
 	}
 
-	sprintf(name, "%s_Nwt_full", output_prefix);
+	sprintf(name, "%s_Nwt_sparse", output_prefix);
 	write_matrix_transpose(W, T, Nwt, name);
-	sprintf(name, "%s_Ndt_full", output_prefix);
+	sprintf(name, "%s_Ndt_sparse", output_prefix);
 	write_matrix_transpose(D, T, Ndt, name);
+	sprintf(name, "%s_Nwt_mean_sparse", output_prefix);
+	write_matrix_transpose(W, T, burn_in_Nwt, name);
+	sprintf(name, "%s_Ndt_mean_sparse", output_prefix);
+	write_matrix_transpose(D, T, burn_in_Ndt, name);
+//	sprintf(name, "%s_collapsed_z", output_prefix);
+//	write_ivec2(N, z, name, "w");
 	sprintf(name, "%s_Nwt", output_prefix);
 	write_sparse_d(W, T, Nwt, name);
 	sprintf(name, "%s_Ndt", output_prefix);
 	write_sparse_d(D, T, Ndt, name);
-	sprintf(name, "%s_collapsed_z", output_prefix);
-	write_ivec(N, z, name);
+	sprintf(name, "%s_Nwt_mean", output_prefix);
+	write_sparse_d(W, T, burn_in_Nwt, name);
+	sprintf(name, "%s_Ndt_mean", output_prefix);
+	write_sparse_d(D, T, burn_in_Ndt, name);
+
+
+	printf("Total execution time = %.5fs\n", total_time);
 
 	double pp = pplex_d(N, W, T, w, d, Nwt, Ndt);
-	printf("In-sample perplexity for %d documents = %.2f time taken = %.5fs\n", D, pp, total_time);
+	printf("In-sample perplexity for %d documents (based on the last sample) = %.2f\n", D, pp);
+
+	double pp2 = pplex_d(N, W, T, w, d, burn_in_Nwt, burn_in_Ndt);
+	printf("In-sample perplexity for %d documents (based on %d burn in samples) = %.2f\n", D, (int)divider, pp2);
 //	fprintf(fp, "In-sample perplexity for %d documents = %.2f time taken = %.5fs\n", D, pp, total_time);
 
 	fclose(fp);

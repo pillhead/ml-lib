@@ -56,7 +56,8 @@ void read_dwc(char *fname, int *d, int *w, int *c, int *D, int *W);
 int read_NNZbin(char *fname);
 int read_NNZ(char *fname);
 void read_sparsebin(char *fname, int *col1, int *col2, int *col3);
-void write_ivec (int n, int *x, char *fname);
+// void write_ivec (int n, int *x, char *fname);
+void write_ivec (int n, int *x, char *fname, char *type);
 void write_dvec (int n, double *x, char *fname);
 void read_ivec (int n, int *x, char *fname);
 void read_dvec (int n, double *x, char *fname);
@@ -92,6 +93,7 @@ double pplex_d(int N, int W, int T, int *w, int *d, double **Nwt, double **Ndt);
 void read_ldac(char *fname, int *d, int *w, int *D, int *W) ;
 int countN_ldac(char *fname);
 void sample_chain_with_prior (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt);
+void sample_chain_with_fixed_beta (int N, int W, int T, int *w, int *d, int *z, double **Nwt, double **Ndt, double *Nt, int *order, double **prior_Nwt);
 void write_matrix(int nr, int nc, double **x, char *fname);
 void write_matrix_transpose(int nr, int nc, double **x, char *fname);
 void read_doc_word_counts_ldac(char *fname, int *d);
@@ -101,5 +103,8 @@ void init_random_generator();
 void free_random_generator();
 double sample_uniform();
 unsigned int sample_uniform_int(unsigned int K);
+void div_scalar_dmat(double **x, double div, int nr, int nc); // divides mat x by double div
+void append_dmat(double **x, double **y, int nr, int nc); // appends mat y to x
+void write_ivec2 (int n, int *x, char *fname, char *type);
 
 #endif
